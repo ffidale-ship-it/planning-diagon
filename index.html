@@ -226,9 +226,7 @@ function loadFromFirebase(snap) {
   if (data.affectations_equip) AFFECTATIONS_EQUIP = data.affectations_equip;
   if (data.livraisons) LIVRAISONS = data.livraisons;
   if (data.besoins) BESOINS = data.besoins;
-  _isRemoteUpdate = true;
-  rerender();
-  _isRemoteUpdate = false;
+  rerender(); // affichage seul, PAS de sync retour
 }
 
 // Chargement initial : récupère les données Firebase AVANT d'activer le sync
@@ -746,7 +744,7 @@ function applyModalSelection() {
     });
   }
   closeModal();
-  rerender();
+  mutateAndSync();
 }
 
 // --- CRUD Ouvriers ---
@@ -756,8 +754,8 @@ function addOuvrier() {
   const cat = document.getElementById("new-ouv-cat").value;
   if (!nom) { alert("Entrez un nom"); return; }
   RESSOURCES.push({ id: _nextOuvId++, nom, cat, visible: true });
-  openModal("ouvriers"); // refresh la liste
-  rerender();
+  openModal("ouvriers");
+  mutateAndSync();
 }
 function removeOuvrier(id) {
   const r = RESSOURCES.find(x => x.id === id);
@@ -766,7 +764,7 @@ function removeOuvrier(id) {
   RESSOURCES.splice(RESSOURCES.indexOf(r), 1);
   AFFECTATIONS = AFFECTATIONS.filter(a => a.r !== id);
   openModal("ouvriers");
-  rerender();
+  mutateAndSync();
 }
 
 // --- CRUD Equipements ---
@@ -778,7 +776,7 @@ function addEquipement() {
   const id = type.slice(0,3) + "-" + String(_nextEquipId++).padStart(2,"0");
   EQUIPEMENTS.push({ id, type, nom, visible: true });
   openModal("ressources");
-  rerender();
+  mutateAndSync();
 }
 function removeEquipement(id) {
   const e = EQUIPEMENTS.find(x => x.id === id);
@@ -787,7 +785,7 @@ function removeEquipement(id) {
   EQUIPEMENTS.splice(EQUIPEMENTS.indexOf(e), 1);
   AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => a.e !== id);
   openModal("ressources");
-  rerender();
+  mutateAndSync();
 }
 
 let dragged = null;
@@ -805,7 +803,7 @@ function attachDragHandlers() {
         if (d === "pool") return;
         AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => !(a.e === id && a.c === c && a.d === d));
       }
-      rerender();
+      mutateAndSync();
     });
   });
   document.querySelectorAll(".bulle[draggable='true']").forEach(el => {
@@ -856,7 +854,7 @@ function attachDragHandlers() {
       if (!dragged || dragged.d === "pool") return;
       if (dragged.kind === "equip") AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => !(a.e === dragged.id && a.c === dragged.c && a.d === dragged.d));
       else if (dragged.kind === "ouvrier") AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === dragged.r && a.c === dragged.c && a.d === dragged.d));
-      rerender();
+      mutateAndSync();
     });
   }
   const poolEquip = document.getElementById("pool-equip");
@@ -867,7 +865,7 @@ function attachDragHandlers() {
       e.preventDefault(); poolEquip.classList.remove("drop-target");
       if (!dragged||dragged.kind!=="equip"||dragged.d==="pool") return;
       AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => !(a.e === dragged.id && a.c === dragged.c && a.d === dragged.d));
-      rerender();
+      mutateAndSync();
     });
   }
 }
@@ -880,23 +878,23 @@ function handleDrop(zone) {
     else { newC = parseInt(zone.dataset.c); newR = dragged.r; }
     if (dragged.d !== "pool") AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === dragged.r && a.c === dragged.c && a.d === dragged.d));
     const conflict = AFFECTATIONS.find(a => a.r === newR && a.d === newD);
-    if (conflict) { if (dragged.d !== "pool") AFFECTATIONS.push({r:dragged.r,c:dragged.c,d:dragged.d}); rerender(); return; }
+    if (conflict) { if (dragged.d !== "pool") AFFECTATIONS.push({r:dragged.r,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
     if (!AFFECTATIONS.find(a => a.r === newR && a.c === newC && a.d === newD)) AFFECTATIONS.push({r:newR,c:newC,d:newD});
-    rerender(); return;
+    mutateAndSync(); return;
   }
   if (dragged.kind === "equip") {
     const newC = parseInt(zone.dataset.c);
     if (dragged.d !== "pool") AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => !(a.e === dragged.id && a.c === dragged.c && a.d === dragged.d));
     const conflict = AFFECTATIONS_EQUIP.find(a => a.e === dragged.id && a.d === newD);
-    if (conflict) { if (dragged.d !== "pool") AFFECTATIONS_EQUIP.push({e:dragged.id,c:dragged.c,d:dragged.d}); rerender(); return; }
+    if (conflict) { if (dragged.d !== "pool") AFFECTATIONS_EQUIP.push({e:dragged.id,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
     if (!AFFECTATIONS_EQUIP.find(a => a.e === dragged.id && a.c === newC && a.d === newD)) AFFECTATIONS_EQUIP.push({e:dragged.id,c:newC,d:newD});
-    rerender(); return;
+    mutateAndSync(); return;
   }
   if (dragged.kind === "liv") {
     const newC = parseInt(zone.dataset.c);
     const liv = livraisonById(dragged.id);
     if (liv) { liv.c = newC; liv.d = newD; }
-    rerender(); return;
+    mutateAndSync(); return;
   }
   if (dragged.kind === "chantier-chip") {
     if (VIEW !== "ouvrier") { rerender(); return; }
@@ -905,7 +903,7 @@ function handleDrop(zone) {
     const conflict = AFFECTATIONS.find(a => a.r === newR && a.d === newD);
     if (conflict) { rerender(); return; }
     AFFECTATIONS.push({r:newR,c:newC,d:newD});
-    rerender(); return;
+    mutateAndSync(); return;
   }
 }
 
@@ -913,14 +911,14 @@ function clearDay(iso) {
   if (!confirm("Effacer toutes les affectations du " + iso + " ?")) return;
   AFFECTATIONS = AFFECTATIONS.filter(a => a.d !== iso);
   AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => a.d !== iso);
-  rerender();
+  mutateAndSync();
 }
 
 function clearWeek(isoFrom, isoTo) {
   if (!confirm("Effacer toutes les affectations de la semaine ?")) return;
   AFFECTATIONS = AFFECTATIONS.filter(a => a.d < isoFrom || a.d > isoTo);
   AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => a.d < isoFrom || a.d > isoTo);
-  rerender();
+  mutateAndSync();
 }
 
 function setView(v) {
@@ -930,20 +928,18 @@ function setView(v) {
   document.getElementById("btn-view-ressources").classList.toggle("active", v === "ressources");
   rerender();
 }
-let _syncTimer = null;
-let _isRemoteUpdate = false;
-
 function rerender() {
   if (VIEW === "ouvrier") renderViewOuvrier();
   else if (VIEW === "chantier") renderViewChantier();
   else renderViewRessources();
   renderStats();
   attachDragHandlers();
-  // Sync vers Firebase (debounced) sauf si c'est un update distant
-  if (!_isRemoteUpdate) {
-    clearTimeout(_syncTimer);
-    _syncTimer = setTimeout(syncToFirebase, 300);
-  }
+}
+
+// Appeler UNIQUEMENT quand l'utilisateur modifie des données
+function mutateAndSync() {
+  rerender();
+  syncToFirebase();
 }
 
 function goToWeek(offset) {
