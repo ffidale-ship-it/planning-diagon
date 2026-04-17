@@ -194,8 +194,10 @@ const DB = firebase.database();
 const DB_REF = DB.ref("planning");
 
 let _lastSyncJson = "";
+let _firebaseReady = false; // bloque le sync tant que le 1er chargement n'est pas fait
 
 function syncToFirebase() {
+  if (!_firebaseReady) return; // pas de sync avant d'avoir chargé Firebase
   const payload = {
     chantiers: CHANTIERS,
     ressources: RESSOURCES,
@@ -206,7 +208,7 @@ function syncToFirebase() {
     besoins: BESOINS,
   };
   const json = JSON.stringify(payload);
-  if (json === _lastSyncJson) return; // pas de changement
+  if (json === _lastSyncJson) return;
   _lastSyncJson = json;
   DB_REF.set(payload);
 }
@@ -215,7 +217,7 @@ function loadFromFirebase(snap) {
   const data = snap.val();
   if (!data) return;
   const json = JSON.stringify(data);
-  if (json === _lastSyncJson) return; // c'est notre propre écriture
+  if (json === _lastSyncJson) return;
   _lastSyncJson = json;
   if (data.chantiers) CHANTIERS = data.chantiers;
   if (data.ressources) RESSOURCES = data.ressources;
@@ -229,14 +231,28 @@ function loadFromFirebase(snap) {
   _isRemoteUpdate = false;
 }
 
-// Listener temps réel — se déclenche quand un autre utilisateur modifie les données
-DB_REF.on("value", snap => {
-  if (typeof rerender === "function") loadFromFirebase(snap);
-});
-
-// Push initial si la DB est vide
+// Chargement initial : récupère les données Firebase AVANT d'activer le sync
 DB_REF.once("value", snap => {
-  if (!snap.val()) syncToFirebase();
+  if (snap.val()) {
+    loadFromFirebase(snap); // charge les données existantes
+  } else {
+    // DB vide → push les données par défaut
+    DB_REF.set({
+      chantiers: CHANTIERS,
+      ressources: RESSOURCES,
+      equipements: EQUIPEMENTS,
+      affectations: AFFECTATIONS,
+      affectations_equip: AFFECTATIONS_EQUIP,
+      livraisons: LIVRAISONS,
+      besoins: BESOINS,
+    });
+  }
+  _firebaseReady = true; // maintenant le sync est autorisé
+
+  // Active le listener temps réel APRÈS le 1er chargement
+  DB_REF.on("value", snap => {
+    if (typeof rerender === "function") loadFromFirebase(snap);
+  });
 });
 
 // Indicateur de connexion
@@ -426,8 +442,11 @@ function renderHeaders(firstColLabel) {
   let wHtml = `<th class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-600 min-w-[200px]">${firstColLabel}</th>`;
   for (let w = 0; w < WEEKS; w++) {
     const first = DATES[w*6];
+    const last = DATES[w*6+5];
     const sNum = getWeekNumber(first);
-    wHtml += `<th colspan="6" class="border-b border-slate-200 px-2 py-2 text-xs font-semibold text-slate-500 bg-slate-100 ${w > 0 ? 'week-separator' : ''}">Semaine ${sNum} - ${first.getDate()} ${MONTHS[first.getMonth()]}</th>`;
+    const isoFirst = toISO(first);
+    const isoLast = toISO(last);
+    wHtml += `<th colspan="6" class="border-b border-slate-200 px-2 py-2 text-xs font-semibold text-slate-500 bg-slate-100 ${w > 0 ? 'week-separator' : ''}">Semaine ${sNum} - ${first.getDate()} ${MONTHS[first.getMonth()]} <button onclick="clearWeek('${isoFirst}','${isoLast}')" class="ml-2 text-red-400 hover:text-red-600 text-[10px]" title="Effacer toute la semaine ${sNum}">🗑</button></th>`;
   }
   weekRow.innerHTML = wHtml;
 
@@ -441,7 +460,7 @@ function renderHeaders(firstColLabel) {
     const satCls = isSat ? "col-sat" : "";
     const sepCls = isMonday ? "week-separator" : "";
     const dayIdx = (d.getDay() + 6) % 7;
-    dHtml += `<th class="border-r border-b border-slate-200 px-1 py-1 text-[11px] text-slate-600 font-medium ${cls} ${satCls} ${sepCls}"><div>${DAYS[dayIdx]}</div><div class="text-[10px] text-slate-400">${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</div></th>`;
+    dHtml += `<th class="border-r border-b border-slate-200 px-1 py-1 text-[11px] text-slate-600 font-medium ${cls} ${satCls} ${sepCls}"><div>${DAYS[dayIdx]} <button onclick="clearDay('${iso}')" class="text-red-400 hover:text-red-600 text-[9px]" title="Effacer le ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}">🗑</button></div><div class="text-[10px] text-slate-400">${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</div></th>`;
   });
   dayRow.innerHTML = dHtml;
 }
@@ -888,6 +907,20 @@ function handleDrop(zone) {
     AFFECTATIONS.push({r:newR,c:newC,d:newD});
     rerender(); return;
   }
+}
+
+function clearDay(iso) {
+  if (!confirm("Effacer toutes les affectations du " + iso + " ?")) return;
+  AFFECTATIONS = AFFECTATIONS.filter(a => a.d !== iso);
+  AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => a.d !== iso);
+  rerender();
+}
+
+function clearWeek(isoFrom, isoTo) {
+  if (!confirm("Effacer toutes les affectations de la semaine ?")) return;
+  AFFECTATIONS = AFFECTATIONS.filter(a => a.d < isoFrom || a.d > isoTo);
+  AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => a.d < isoFrom || a.d > isoTo);
+  rerender();
 }
 
 function setView(v) {
