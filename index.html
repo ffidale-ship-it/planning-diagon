@@ -43,6 +43,14 @@
   .toggle-btn:not(.active):hover { background: #e2e8f0; }
   .week-separator { border-left: 3px solid #cbd5e1 !important; }
   .cell-sat { background: #f8fafc; }
+  .dup-btns { display: inline-flex; gap: 2px; margin-top: 2px; justify-content: flex-end; }
+  .dup-btn {
+    font-size: 8px; line-height: 1; padding: 2px 5px;
+    background: transparent; color: #94a3b8; border: 1px solid #e2e8f0; border-radius: 3px;
+    cursor: pointer; transition: all 0.15s; position: relative; z-index: 5;
+    letter-spacing: 0.5px;
+  }
+  .dup-btn:hover { background: #3b82f6; color: white; border-color: #3b82f6; }
   th.col-sat { background: #e2e8f0 !important; }
   .coverage-cell { position: relative; cursor: pointer; }
   .coverage-cell:hover .coverage-tooltip { display: block; }
@@ -500,6 +508,7 @@ function renderViewOuvrier() {
           const color = colorChantier(aff.c);
           const lbl = ch.id === 0 ? "Atelier" : ch.nom;
           inner = `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${aff.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + ch.client + ' - ' + ch.nom}">${lbl}</span>`;
+          inner += `<div class="dup-btns"><button onclick="dupNext('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier au jour suivant">+1j</button><button onclick="dupWeek('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier jusqu'au vendredi">→ven</button></div>`;
         }
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
       }).join("");
@@ -538,7 +547,8 @@ function renderViewChantier() {
         if (!r) return "";
         return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.nom}">${r.nom}</span>`;
       }).join("");
-      return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${bulles}</td>`;
+      const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button></div>` : "";
+      return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${bulles}${dupBtns}</td>`;
     }).join("");
     const label = ch.id === 0
       ? `<div class="font-bold text-slate-700 text-sm">ATELIER</div><div class="text-[10px] text-slate-400">Interne</div>`
@@ -905,6 +915,68 @@ function handleDrop(zone) {
     AFFECTATIONS.push({r:newR,c:newC,d:newD});
     mutateAndSync(); return;
   }
+}
+
+// --- DUPLICATION ---
+function _localISO(d) {
+  // ISO local (pas UTC) pour éviter le décalage timezone
+  return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0");
+}
+
+function _getNextDate(iso) {
+  const parts = iso.split("-");
+  const d = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2]));
+  d.setDate(d.getDate() + 1);
+  if (d.getDay() === 0) d.setDate(d.getDate() + 1); // skip dimanche
+  return _localISO(d);
+}
+
+function _dateInView(targetD) {
+  return DATES.some(d => toISO(d) === targetD);
+}
+
+function _dupOuvrierToDate(r, c, targetD) {
+  if (AFFECTATIONS.find(a => a.r === r && a.d === targetD)) return false;
+  AFFECTATIONS.push({ r: r, c: c, d: targetD });
+  return true;
+}
+
+function _dupChantierToDate(chId, fromD, targetD) {
+  const team = AFFECTATIONS.filter(a => a.c === chId && a.d === fromD);
+  let added = 0;
+  team.forEach(a => {
+    if (!AFFECTATIONS.find(x => x.r === a.r && x.d === targetD)) {
+      AFFECTATIONS.push({ r: a.r, c: chId, d: targetD });
+      added++;
+    }
+  });
+  return added > 0;
+}
+
+function dupNext(mode, id1, id2, fromD) {
+  event.stopPropagation();
+  const targetD = _getNextDate(fromD);
+  if (!_dateInView(targetD)) return;
+  if (mode === "ouvrier") _dupOuvrierToDate(id1, id2, targetD);
+  else if (mode === "chantier") _dupChantierToDate(id1, fromD, targetD);
+  mutateAndSync();
+}
+
+function dupWeek(mode, id1, id2, fromD) {
+  event.stopPropagation();
+  let currentD = fromD;
+  for (let i = 0; i < 5; i++) {
+    const nextD = _getNextDate(currentD);
+    if (!_dateInView(nextD)) break;
+    // Stop au vendredi (pas de dup sur samedi)
+    const parts = nextD.split("-");
+    const dow = new Date(parseInt(parts[0]), parseInt(parts[1])-1, parseInt(parts[2])).getDay();
+    if (dow === 6) break; // samedi
+    if (mode === "ouvrier") _dupOuvrierToDate(id1, id2, nextD);
+    else if (mode === "chantier") _dupChantierToDate(id1, fromD, nextD);
+    currentD = nextD;
+  }
+  mutateAndSync();
 }
 
 function clearDay(iso) {
