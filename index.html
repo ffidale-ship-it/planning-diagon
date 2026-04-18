@@ -202,18 +202,25 @@
           <p class="text-sm text-slate-500 leading-tight text-right">Vue 4 semaines<br>semaine 16 (13 avril 2026)</p>
         </div>
       </div>
-      <!-- Ligne 2 : navigation + gestion + PDF -->
-      <div class="flex items-center gap-3 flex-wrap py-2 border-t border-slate-100">
-        <button id="btn-prev" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">← Sem.</button>
-        <button id="btn-today" class="px-3 py-1.5 text-sm font-medium bg-slate-800 text-white hover:bg-slate-900 rounded-md toggle-btn">Aujourd'hui</button>
-        <button id="btn-next" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">Sem. →</button>
-        <div class="w-px h-6 bg-slate-300"></div>
-        <button onclick="openModal('chantiers')" class="px-3 py-1.5 text-sm font-medium bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-md" title="Gérer tous les chantiers">🏗 Chantiers</button>
-        <button onclick="openModal('ouvriers')" class="px-3 py-1.5 text-sm font-medium bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-md" title="Gérer les ouvriers">👷 Ouvriers</button>
-        <button onclick="openModal('ressources')" class="px-3 py-1.5 text-sm font-medium bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-md" title="Gérer les équipements">🚚 Équipements</button>
-        <div class="w-px h-6 bg-slate-300"></div>
-        <button onclick="printPlanning('week')" class="px-3 py-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-md" title="Imprimer la semaine courante (A3 paysage)">🖨 PDF sem.</button>
-        <button onclick="printPlanning('full')" class="px-3 py-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-md" title="Imprimer les 4 semaines (A3 paysage)">🖨 PDF 4 sem.</button>
+      <!-- Ligne 2 : navigation gauche | gestion centre | PDF droite -->
+      <div class="flex items-center gap-3 py-2 border-t border-slate-100">
+        <!-- GAUCHE : navigation semaines -->
+        <div class="flex items-center gap-2 shrink-0">
+          <button id="btn-prev" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">← Sem.</button>
+          <button id="btn-today" class="px-3 py-1.5 text-sm font-medium bg-slate-800 text-white hover:bg-slate-900 rounded-md toggle-btn">Aujourd'hui</button>
+          <button id="btn-next" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">Sem. →</button>
+        </div>
+        <!-- CENTRE : gestion (couleurs alignees sur les bulles vues) -->
+        <div class="flex-1 flex items-center justify-center gap-3 flex-wrap">
+          <button onclick="openModal('chantiers')" class="px-4 py-1.5 text-sm font-semibold bg-orange-500 hover:bg-orange-600 text-white rounded-md shadow-sm" title="Gérer tous les chantiers">🏗 Chantiers</button>
+          <button onclick="openModal('ouvriers')"  class="px-4 py-1.5 text-sm font-semibold bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm"     title="Gérer les ouvriers">👷 Ouvriers</button>
+          <button onclick="openModal('ressources')" class="px-4 py-1.5 text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-md shadow-sm" title="Gérer les équipements">🚚 Équipements</button>
+        </div>
+        <!-- DROITE : PDF (petits, discrets) -->
+        <div class="flex items-center gap-1 shrink-0">
+          <button onclick="printPlanning('week')" class="px-2 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded" title="Imprimer la semaine courante (A3 paysage)">🖨 PDF sem.</button>
+          <button onclick="printPlanning('full')" class="px-2 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded" title="Imprimer les 4 semaines (A3 paysage)">🖨 PDF 4 sem.</button>
+        </div>
       </div>
     </header>
 
