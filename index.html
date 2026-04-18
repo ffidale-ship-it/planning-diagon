@@ -55,6 +55,42 @@
   .cat-indispo-conge     { box-shadow: inset 0 0 0 2px #fbbf24; }
   .cat-indispo-maladie   { box-shadow: inset 0 0 0 2px #ef4444; }
   .cat-indispo-formation { box-shadow: inset 0 0 0 2px #3b82f6; }
+
+  @media print {
+    @page {
+      size: A3 landscape;
+      margin: 8mm;
+    }
+    html, body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    aside,
+    #context-bar,
+    .dup-btns, .dup-btn,
+    .no-print,
+    header > div:last-child {
+      display: none !important;
+    }
+    header {
+      border-bottom: 2px solid #000 !important;
+      padding: 4mm 0 !important;
+    }
+    header h1 { font-size: 14pt !important; }
+    header p { font-size: 9pt !important; }
+    .flex-1.overflow-auto { overflow: visible !important; height: auto !important; }
+    main, .flex-1 { display: block !important; }
+    table { page-break-inside: auto; }
+    tr { page-break-inside: avoid; page-break-after: auto; }
+    thead { display: table-header-group; position: static !important; box-shadow: none !important; }
+    .sticky { position: static !important; }
+    .bulle {
+      font-size: 8pt !important;
+      padding: 1px 4px !important;
+      border-width: 1px !important;
+      box-shadow: none !important;
+    }
+    .dup-btns, button[onclick*="clearDay"], button[onclick*="clearWeek"], button[onclick*="openModal"] { display: none !important; }
+    body { font-size: 9pt !important; }
+    .cell { min-height: 30px !important; }
+  }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
   .pool-area { background: repeating-linear-gradient(45deg, #f8fafc, #f8fafc 8px, #f1f5f9 8px, #f1f5f9 16px); }
   .toggle-btn { transition: all 0.15s; }
@@ -116,6 +152,8 @@
         <button id="btn-prev" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">← Sem.</button>
         <button id="btn-today" class="px-3 py-1.5 text-sm font-medium bg-slate-800 text-white hover:bg-slate-900 rounded-md toggle-btn">Aujourd'hui</button>
         <button id="btn-next" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">Sem. →</button>
+        <div class="w-px h-6 bg-slate-300"></div>
+        <button onclick="window.print()" class="px-3 py-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-md" title="Imprimer / Exporter PDF (A3 paysage)">🖨 PDF</button>
       </div>
     </header>
 
