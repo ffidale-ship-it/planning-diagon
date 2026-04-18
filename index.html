@@ -85,6 +85,29 @@
   #btn-view-atelier.active    { background: #ef4444; }
   #btn-view-ressources.active { background: #10b981; }
 
+  /* === Scope toggles (🏗 / 🔧) dans les modals === */
+  .scope-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    border-radius: 8px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.15s;
+    user-select: none;
+    opacity: 0.28;
+    filter: grayscale(100%);
+  }
+  .scope-toggle:hover { background: #f1f5f9; }
+  .scope-toggle.active {
+    opacity: 1;
+    filter: none;
+    font-size: 22px;
+    background: #eef2ff;
+  }
+
   @media print {
     @page {
       size: A3 landscape;
@@ -1004,15 +1027,9 @@ function openModal(mode) {
     const rowsCh = CHANTIERS.map(c => {
       const archived = !c.show_chantier && !c.show_atelier;
       return `
-      <div class="flex items-center gap-2 py-1 px-2 hover:bg-slate-50 rounded ${archived ? 'opacity-50' : ''}" data-chid="${c.id}">
-        <label class="flex items-center gap-1 text-xs cursor-pointer" title="Afficher dans Par ouvrier / Par chantier">
-          <input type="checkbox" onchange="setChantierScope(${c.id}, 'chantier', this.checked)" ${c.show_chantier ? "checked" : ""} class="rounded">
-          <span class="text-base leading-none">🏗</span>
-        </label>
-        <label class="flex items-center gap-1 text-xs cursor-pointer mr-2" title="Afficher dans la vue Atelier">
-          <input type="checkbox" onchange="setChantierScope(${c.id}, 'atelier', this.checked)" ${c.show_atelier ? "checked" : ""} class="rounded">
-          <span class="text-base leading-none">🔧</span>
-        </label>
+      <div class="flex items-center gap-2 py-1 px-2 hover:bg-slate-50 rounded ${archived ? 'opacity-60' : ''}" data-chid="${c.id}">
+        <span onclick="setChantierScope(${c.id}, 'chantier', ${!c.show_chantier})" class="scope-toggle ${c.show_chantier ? 'active' : ''}" title="Par ouvrier / Par chantier (clic pour basculer)">🏗</span>
+        <span onclick="setChantierScope(${c.id}, 'atelier', ${!c.show_atelier})" class="scope-toggle ${c.show_atelier ? 'active' : ''} mr-1" title="Atelier (clic pour basculer)">🔧</span>
         <span class="text-xs font-mono text-slate-400 w-10">${c.id}</span>
         <span class="text-xs text-slate-500 w-28 truncate">${c.client}</span>
         <span class="text-sm text-slate-800 flex-1">${c.nom}</span>
@@ -1025,12 +1042,8 @@ function openModal(mode) {
         <div class="flex items-center gap-2 flex-wrap">
           <input id="new-ch-client" type="text" placeholder="Client (ex: ULC)" class="w-32 text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
           <input id="new-ch-nom" type="text" placeholder="Nom / description" class="flex-1 text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
-          <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Par ouvrier / Par chantier">
-            <input id="new-ch-chantier" type="checkbox" checked class="rounded"> 🏗
-          </label>
-          <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Atelier">
-            <input id="new-ch-atelier" type="checkbox" class="rounded"> 🔧
-          </label>
+          <span id="new-ch-chantier" onclick="toggleFormScope(this)" data-active="1" class="scope-toggle active" title="Par ouvrier / Par chantier">🏗</span>
+          <span id="new-ch-atelier" onclick="toggleFormScope(this)" data-active="0" class="scope-toggle" title="Atelier">🔧</span>
           <button onclick="addChantier()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1.5 text-sm font-semibold">+</button>
         </div>
       </div>`;
@@ -1041,16 +1054,10 @@ function openModal(mode) {
     const rows = RESSOURCES.map(r => {
       const archived = !r.show_chantier && !r.show_atelier;
       return `
-      <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded group ${archived ? 'opacity-50' : ''}" data-res-id="${r.id}">
-        <button onclick="toggleChef(${r.id})" class="text-lg leading-none ${r.chef ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500'}" title="Chef">${r.chef ? "⭐" : "☆"}</button>
-        <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Par ouvrier / Par chantier">
-          <input type="checkbox" onchange="setOuvrierScope(${r.id}, 'chantier', this.checked)" ${r.show_chantier ? "checked" : ""} class="rounded">
-          <span class="text-base leading-none">🏗</span>
-        </label>
-        <label class="flex items-center gap-1 text-xs cursor-pointer mr-1" title="Visible dans Atelier">
-          <input type="checkbox" onchange="setOuvrierScope(${r.id}, 'atelier', this.checked)" ${r.show_atelier ? "checked" : ""} class="rounded">
-          <span class="text-base leading-none">🔧</span>
-        </label>
+      <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded group ${archived ? 'opacity-60' : ''}" data-res-id="${r.id}">
+        <button onclick="toggleChef(${r.id})" class="text-lg leading-none ${r.chef ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500'}" title="Chef d'équipe">${r.chef ? "⭐" : "☆"}</button>
+        <span onclick="setOuvrierScope(${r.id}, 'chantier', ${!r.show_chantier})" class="scope-toggle ${r.show_chantier ? 'active' : ''}" title="Par ouvrier / Par chantier (clic pour basculer)">🏗</span>
+        <span onclick="setOuvrierScope(${r.id}, 'atelier', ${!r.show_atelier})" class="scope-toggle ${r.show_atelier ? 'active' : ''} mr-1" title="Atelier (clic pour basculer)">🔧</span>
         <span class="text-sm font-semibold text-slate-800 flex-1">${r.nom}</span>
         <span class="text-xs text-slate-500 w-20">${cats[r.cat] || r.cat}</span>
         <button onclick="removeOuvrier(${r.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer">&minus;</button>
@@ -1066,12 +1073,8 @@ function openModal(mode) {
             <option value="atelier">Atelier</option>
             <option value="externe">Externe</option>
           </select>
-          <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Par ouvrier / Par chantier">
-            <input id="new-ouv-chantier" type="checkbox" checked class="rounded"> 🏗
-          </label>
-          <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Atelier">
-            <input id="new-ouv-atelier" type="checkbox" class="rounded"> 🔧
-          </label>
+          <span id="new-ouv-chantier" onclick="toggleFormScope(this)" data-active="1" class="scope-toggle active" title="Par ouvrier / Par chantier">🏗</span>
+          <span id="new-ouv-atelier" onclick="toggleFormScope(this)" data-active="0" class="scope-toggle" title="Atelier">🔧</span>
           <button onclick="addOuvrier()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1.5 text-sm font-semibold">+</button>
         </div>
       </div>`;
@@ -1127,8 +1130,8 @@ let _nextOuvId = 100;
 function addOuvrier() {
   const nom = document.getElementById("new-ouv-nom").value.trim();
   const cat = document.getElementById("new-ouv-cat").value;
-  const show_chantier = document.getElementById("new-ouv-chantier").checked;
-  const show_atelier = document.getElementById("new-ouv-atelier").checked;
+  const show_chantier = document.getElementById("new-ouv-chantier").dataset.active === "1";
+  const show_atelier = document.getElementById("new-ouv-atelier").dataset.active === "1";
   if (!nom) { alert("Entrez un nom"); return; }
   if (!show_chantier && !show_atelier) { alert("Cochez au moins 🏗 Chantier ou 🔧 Atelier."); return; }
   RESSOURCES.push({ id: _nextOuvId++, nom, cat, visible: true, show_chantier, show_atelier });
@@ -1171,11 +1174,16 @@ function setChantierScope(id, scope, checked) {
   mutateAndSync();
   openModal("chantiers");
 }
+function toggleFormScope(el) {
+  const active = el.dataset.active === "1";
+  el.dataset.active = active ? "0" : "1";
+  el.classList.toggle("active", !active);
+}
 function addChantier() {
   const client = document.getElementById("new-ch-client").value.trim();
   const nom = document.getElementById("new-ch-nom").value.trim();
-  const show_chantier = document.getElementById("new-ch-chantier").checked;
-  const show_atelier = document.getElementById("new-ch-atelier").checked;
+  const show_chantier = document.getElementById("new-ch-chantier").dataset.active === "1";
+  const show_atelier = document.getElementById("new-ch-atelier").dataset.active === "1";
   if (!nom || !client) { alert("Entrez client et nom"); return; }
   if (!show_chantier && !show_atelier) { alert("Cochez au moins 🏗 Chantier ou 🔧 Atelier."); return; }
   while (CHANTIERS.find(c => c.id === _nextChId) || _nextChId < 500) _nextChId++;
