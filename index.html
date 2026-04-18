@@ -51,6 +51,10 @@
   .cat-outillage { background: #f3e8ff; color: #581c87; border-color: #d8b4fe; }
   .cat-livraison { background: #fed7aa; color: #7c2d12; border-color: #fb923c; border-style: dashed; }
   .cat-besoin    { background: #f1f5f9; color: #475569; border-color: #94a3b8; border-style: dotted; font-style: italic; }
+  .cat-indispo   { background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 5px, #cbd5e1 5px, #cbd5e1 10px); color: #334155; border-color: #94a3b8; }
+  .cat-indispo-conge     { box-shadow: inset 0 0 0 2px #fbbf24; }
+  .cat-indispo-maladie   { box-shadow: inset 0 0 0 2px #ef4444; }
+  .cat-indispo-formation { box-shadow: inset 0 0 0 2px #3b82f6; }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
   .pool-area { background: repeating-linear-gradient(45deg, #f8fafc, #f8fafc 8px, #f1f5f9 8px, #f1f5f9 16px); }
   .toggle-btn { transition: all 0.15s; }
@@ -230,6 +234,7 @@ function syncToFirebase() {
     affectations_equip: AFFECTATIONS_EQUIP,
     livraisons: LIVRAISONS,
     besoins: BESOINS,
+    indispos: INDISPOS,
   };
   const json = JSON.stringify(payload);
   if (json === _lastSyncJson) return;
@@ -250,6 +255,7 @@ function loadFromFirebase(snap) {
   if (data.affectations_equip) AFFECTATIONS_EQUIP = data.affectations_equip;
   if (data.livraisons) LIVRAISONS = data.livraisons;
   if (data.besoins) BESOINS = data.besoins;
+  if (data.indispos) INDISPOS = data.indispos; else INDISPOS = [];
   rerender(); // affichage seul, PAS de sync retour
 }
 
@@ -267,6 +273,7 @@ DB_REF.once("value", snap => {
       affectations_equip: AFFECTATIONS_EQUIP,
       livraisons: LIVRAISONS,
       besoins: BESOINS,
+      indispos: INDISPOS,
     });
   }
   _firebaseReady = true; // maintenant le sync est autorisé
@@ -398,6 +405,14 @@ let BESOINS = [
   { id: "bes-004", nom: "Panneaux OSB",           qte: "40 m2",  c: 404, semaine: 17 },
   { id: "bes-005", nom: "Etancheite EPDM",        qte: "80 m2",  c: 406, semaine: 17 },
 ];
+// Indisponibilites : {r: id_ressource, d: "YYYY-MM-DD", type: "conge"|"maladie"|"formation"}
+let INDISPOS = [];
+const INDISPO_TYPES = {
+  conge:     { label: "Congé",     icon: "🏖" },
+  maladie:   { label: "Maladie",   icon: "🤒" },
+  formation: { label: "Formation", icon: "📚" },
+};
+function indispoAt(r, d) { return INDISPOS.find(i => i.r === r && i.d === d); }
 function equipementById(id) { return EQUIPEMENTS.find(e => e.id === id); }
 function livraisonById(id)  { return LIVRAISONS.find(l => l.id === id); }
 function iconEquip(type) {
@@ -501,11 +516,18 @@ function renderViewOuvrier() {
     const label = c.id === 0 ? "ATELIER" : c.id + " - " + c.nom;
     return `<span class="bulle ${colorChantier(c.id)}" draggable="true" data-kind="chantier-chip" data-c="${c.id}" data-d="chip" style="cursor:grab">${label}</span>`;
   }).join("");
+  const indispoChipsHtml = Object.entries(INDISPO_TYPES).map(([type, info]) => {
+    return `<span class="bulle cat-indispo cat-indispo-${type}" draggable="true" data-kind="indispo-chip" data-type="${type}" data-d="chip" style="cursor:grab">${info.icon} ${info.label}</span>`;
+  }).join("");
   document.getElementById("context-bar").innerHTML = `
     <div class="flex items-center gap-2 flex-wrap">
       <span class="text-xs font-semibold text-slate-500 mr-2">CHANTIERS ACTIFS (glisser sur une cellule vide) :</span>
       ${chipsHtml}
       <button onclick="openModal('chantiers')" class="ml-2 text-xs text-blue-600 hover:text-blue-800 font-medium underline">Gérer</button>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap mt-1">
+      <span class="text-xs font-semibold text-slate-500 mr-2">INDISPONIBILITÉS (glisser sur le jour concerné) :</span>
+      ${indispoChipsHtml}
     </div>`;
   const groups = {
     "OUVRIERS CHANTIER": RESSOURCES.filter(r => r.cat === "chantier" && r.visible !== false),
@@ -525,8 +547,12 @@ function renderViewOuvrier() {
         const satCls = isSat ? "cell-sat" : "";
         const sepCls = isMonday ? "week-separator" : "";
         const aff = AFFECTATIONS.find(a => a.r === r.id && a.d === iso);
+        const ind = indispoAt(r.id, iso);
         let inner = "";
-        if (aff) {
+        if (ind) {
+          const info = INDISPO_TYPES[ind.type] || { label: ind.type, icon: "" };
+          inner = `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${info.label} - double-clic pour retirer">${info.icon} ${info.label}</span>`;
+        } else if (aff) {
           const ch = chantierById(aff.c);
           const color = colorChantier(aff.c);
           const lbl = ch.id === 0 ? "Atelier" : ch.nom;
@@ -642,6 +668,7 @@ function renderViewRessources() {
 function renderStats() {
   const thisWeekDates = DATES.filter(d => !isWeekend(d)).slice(0,5).map(toISO);
   const affThisWeek = AFFECTATIONS.filter(a => thisWeekDates.includes(a.d));
+  const indThisWeek = INDISPOS.filter(i => thisWeekDates.includes(i.d));
   const activeChantiers = new Set(affThisWeek.map(a => a.c));
   const ressourcesUsed = new Set(affThisWeek.map(a => a.r));
   const nbRessources = RESSOURCES.length;
@@ -649,11 +676,13 @@ function renderStats() {
   document.getElementById("stat-active").textContent = activeChantiers.size;
   document.getElementById("stat-ressources").textContent = ressourcesUsed.size + "/" + nbRessources;
   document.getElementById("stat-affectations").textContent = affThisWeek.length;
-  document.getElementById("stat-libre").textContent = Math.max(0, totalSlots - affThisWeek.length);
+  document.getElementById("stat-libre").textContent = Math.max(0, totalSlots - affThisWeek.length - indThisWeek.length);
   const allWorkDates = DATES.filter(d => !isWeekend(d)).map(toISO);
   const allAff = AFFECTATIONS.filter(a => allWorkDates.includes(a.d));
+  const allInd = INDISPOS.filter(i => allWorkDates.includes(i.d));
   const totalAll = nbRessources * allWorkDates.length;
-  const pct = totalAll > 0 ? Math.round((allAff.length / totalAll) * 100) : 0;
+  const dispoAll = Math.max(1, totalAll - allInd.length); // evite division par 0
+  const pct = Math.round((allAff.length / dispoAll) * 100);
   document.getElementById("stat-couverture").textContent = pct + "%";
 
   const nbR = RESSOURCES.length;
@@ -667,16 +696,32 @@ function renderStats() {
     if (isSat) { cHtml += `<td class="cell-sat border-r border-slate-200 ${sepCls}"></td>`; return; }
     const assignedIds = new Set(AFFECTATIONS.filter(a => a.d === iso).map(a => a.r));
     const assigned = assignedIds.size;
-    const ratio = nbR > 0 ? assigned / nbR : 0;
+    const indispoCount = INDISPOS.filter(i => i.d === iso).length;
+    const dispoDay = Math.max(1, nbR - indispoCount);
+    const ratio = assigned / dispoDay;
     const pctDay = Math.round(ratio * 100);
     const barColor = ratio >= 1 ? "bg-emerald-500" : ratio >= 0.7 ? "bg-amber-400" : "bg-red-400";
-    const missing = RESSOURCES.filter(r => r.visible !== false && !assignedIds.has(r.id));
-    const tooltipContent = missing.length === 0
-      ? '<span class="all-ok">Tous planifiés !</span>'
-      : '<div style="margin-bottom:3px;color:#94a3b8;font-size:10px">Non affectés :</div>' + missing.map(r => '<span class="missing-name">' + r.nom + '</span>').join('<br>');
+    const indispoIdsDay = new Set(INDISPOS.filter(i => i.d === iso).map(i => i.r));
+    const missing = RESSOURCES.filter(r => r.visible !== false && !assignedIds.has(r.id) && !indispoIdsDay.has(r.id));
+    const indispoList = RESSOURCES.filter(r => indispoIdsDay.has(r.id));
+    let tooltipContent;
+    if (missing.length === 0 && indispoList.length === 0) {
+      tooltipContent = '<span class="all-ok">Tous planifiés !</span>';
+    } else {
+      tooltipContent = "";
+      if (missing.length > 0) tooltipContent += '<div style="margin-bottom:3px;color:#94a3b8;font-size:10px">Non affectés :</div>' + missing.map(r => '<span class="missing-name">' + r.nom + '</span>').join('<br>');
+      if (indispoList.length > 0) {
+        if (missing.length > 0) tooltipContent += '<br><br>';
+        tooltipContent += '<div style="margin-bottom:3px;color:#94a3b8;font-size:10px">Indisponibles :</div>' + indispoList.map(r => {
+          const ind = indispoAt(r.id, iso);
+          const info = INDISPO_TYPES[ind.type] || { label: ind.type, icon: "" };
+          return '<span class="missing-name">' + r.nom + ' (' + info.icon + ' ' + info.label + ')</span>';
+        }).join('<br>');
+      }
+    }
     cHtml += `<td class="border-r border-slate-200 px-0.5 py-0.5 coverage-cell ${isToday ? 'cell-today' : ''} ${sepCls}">
       <div class="h-2 bg-slate-200 rounded-full overflow-hidden"><div class="${barColor} h-full rounded-full" style="width:${pctDay}%"></div></div>
-      <div class="text-[8px] text-center ${ratio >= 1 ? 'text-emerald-600 font-bold' : 'text-slate-400'}">${assigned}/${nbR}</div>
+      <div class="text-[8px] text-center ${ratio >= 1 ? 'text-emerald-600 font-bold' : 'text-slate-400'}">${assigned}/${dispoDay}</div>
       <div class="coverage-tooltip">${tooltipContent}</div>
     </td>`;
   });
@@ -835,6 +880,10 @@ function attachDragHandlers() {
         const id = el.dataset.id, c = parseInt(el.dataset.c), d = el.dataset.d;
         if (d === "pool") return;
         AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => !(a.e === id && a.c === c && a.d === d));
+      } else if (kind === "indispo") {
+        const r = parseInt(el.dataset.r), d = el.dataset.d;
+        if (d === "pool" || d === "chip") return;
+        INDISPOS = INDISPOS.filter(i => !(i.r === r && i.d === d));
       }
       mutateAndSync();
     });
@@ -842,7 +891,7 @@ function attachDragHandlers() {
   document.querySelectorAll(".bulle[draggable='true']").forEach(el => {
     el.addEventListener("dragstart", e => {
       const kind = el.dataset.kind || "ouvrier";
-      dragged = {kind:kind, r:el.dataset.r?parseInt(el.dataset.r):null, id:el.dataset.id||null, c:el.dataset.c?parseInt(el.dataset.c):null, d:el.dataset.d, el:el};
+      dragged = {kind:kind, r:el.dataset.r?parseInt(el.dataset.r):null, id:el.dataset.id||null, c:el.dataset.c?parseInt(el.dataset.c):null, d:el.dataset.d, type:el.dataset.type||null, el:el};
       el.classList.add("dragging");
       e.dataTransfer.effectAllowed = "move";
     });
@@ -860,6 +909,7 @@ function attachDragHandlers() {
       if (VIEW === "ouvrier" && (dragged.kind === "ouvrier" || !dragged.kind)) {
         const targetR = parseInt(zone.dataset.r);
         const targetD = zone.dataset.d;
+        if (indispoAt(targetR, targetD)) { zone.classList.add("drop-forbidden"); return; }
         const existing = AFFECTATIONS.find(a => a.r === targetR && a.d === targetD);
         if (existing && !(existing.r === dragged.r && existing.c === dragged.c && existing.d === dragged.d)) { zone.classList.add("drop-forbidden"); return; }
       }
@@ -887,6 +937,7 @@ function attachDragHandlers() {
       if (!dragged || dragged.d === "pool") return;
       if (dragged.kind === "equip") AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => !(a.e === dragged.id && a.c === dragged.c && a.d === dragged.d));
       else if (dragged.kind === "ouvrier") AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === dragged.r && a.c === dragged.c && a.d === dragged.d));
+      else if (dragged.kind === "indispo") INDISPOS = INDISPOS.filter(i => !(i.r === dragged.r && i.d === dragged.d));
       mutateAndSync();
     });
   }
@@ -910,9 +961,25 @@ function handleDrop(zone) {
     if (VIEW === "ouvrier") { newR = parseInt(zone.dataset.r); newC = dragged.c; }
     else { newC = parseInt(zone.dataset.c); newR = dragged.r; }
     if (dragged.d !== "pool") AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === dragged.r && a.c === dragged.c && a.d === dragged.d));
+    // Conflit indispo : un ouvrier en conge/maladie/formation ne peut pas etre affecte
+    if (indispoAt(newR, newD)) { if (dragged.d !== "pool") AFFECTATIONS.push({r:dragged.r,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
     const conflict = AFFECTATIONS.find(a => a.r === newR && a.d === newD);
     if (conflict) { if (dragged.d !== "pool") AFFECTATIONS.push({r:dragged.r,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
     if (!AFFECTATIONS.find(a => a.r === newR && a.c === newC && a.d === newD)) AFFECTATIONS.push({r:newR,c:newC,d:newD});
+    mutateAndSync(); return;
+  }
+  if (dragged.kind === "indispo-chip" || dragged.kind === "indispo") {
+    if (VIEW !== "ouvrier") { rerender(); return; }
+    const newR = parseInt(zone.dataset.r);
+    const type = dragged.type;
+    // Si deplacement d'un indispo existant : retirer l'ancien
+    if (dragged.kind === "indispo" && dragged.d !== "pool") {
+      INDISPOS = INDISPOS.filter(i => !(i.r === dragged.r && i.d === dragged.d));
+    }
+    // Remplace toute affectation ou indispo deja presente sur la cellule cible
+    AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === newR && a.d === newD));
+    INDISPOS = INDISPOS.filter(i => !(i.r === newR && i.d === newD));
+    INDISPOS.push({ r: newR, d: newD, type: type });
     mutateAndSync(); return;
   }
   if (dragged.kind === "equip") {
