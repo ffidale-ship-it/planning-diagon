@@ -126,52 +126,61 @@
   .ouvrier-name-bubble.cat-externe  { background: #fee2e2; color: #991b1b; border-color: #f87171; }
 
   @media print {
-    @page {
-      size: A3 landscape;
-      margin: 8mm;
-    }
+    @page { size: A3 landscape; margin: 5mm; }
     html, body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    /* Masquer tout sauf logo et table */
     aside,
     #context-bar,
     .dup-btns, .dup-btn,
     .no-print,
-    header > div:last-child {
-      display: none !important;
-    }
+    .view-bubble,
+    header > div > p,
+    header > div > div:last-child,
+    header > div:last-child
+    { display: none !important; }
+    /* Header : logo seul a gauche */
     header {
-      border-bottom: 2px solid #000 !important;
-      padding: 4mm 0 !important;
+      border-bottom: 2px solid #E94E1B !important;
+      padding: 2mm 0 !important;
     }
-    header h1 { font-size: 14pt !important; }
-    header p { font-size: 9pt !important; }
-    /* Force le layout a etre lineaire (pas de flex/scroll) */
+    header > div:first-child {
+      justify-content: flex-start !important;
+      gap: 0 !important;
+    }
+    #logo-diagon { height: 16mm !important; }
+    /* Layout lineaire */
     .flex, .flex-1 { display: block !important; }
     .overflow-auto, .overflow-hidden { overflow: visible !important; height: auto !important; max-height: none !important; }
     main { display: block !important; height: auto !important; }
-    /* Tableau : largeur forcee a la page, colonnes egales */
+    /* Tableau fit-to-page */
     table {
       width: 100% !important;
       table-layout: fixed !important;
-      page-break-inside: auto;
       border-collapse: collapse !important;
     }
-    tr { page-break-inside: avoid; page-break-after: auto; }
+    tr { page-break-inside: avoid; }
     thead { display: table-header-group; position: static !important; box-shadow: none !important; }
     .sticky { position: static !important; }
     td, th { overflow: hidden; word-wrap: break-word; }
-    /* 1re colonne (label ressource/chantier) plus etroite pour liberer de la place */
-    td:first-child, th:first-child { width: 90px !important; min-width: 0 !important; max-width: 90px !important; }
-    /* Mode semaine : 6 colonnes, bulles plus grandes */
+    td:first-child, th:first-child { width: 70px !important; min-width: 0 !important; max-width: 70px !important; }
+    /* Mode 1 semaine : bulles plus grandes, lisible */
     body.print-week { font-size: 10pt !important; }
     body.print-week .bulle { font-size: 9pt !important; padding: 2px 5px !important; border-width: 1px !important; box-shadow: none !important; }
-    body.print-week .cell { min-height: 40px !important; }
-    /* Mode 4 semaines : 24 colonnes, bulles plus serrees */
-    body.print-full { font-size: 7pt !important; }
-    body.print-full .bulle { font-size: 6.5pt !important; padding: 1px 3px !important; border-width: 1px !important; box-shadow: none !important; }
-    body.print-full .cell { min-height: 25px !important; }
-    body.print-full td:first-child, body.print-full th:first-child { width: 70px !important; max-width: 70px !important; }
-    /* Cache les boutons de gestion dans les en-tetes (corbeilles, etc.) */
-    button[onclick*="clearDay"], button[onclick*="clearWeek"], button[onclick*="openModal"], button[onclick*="toggleHideEmpty"], button[onclick*="printPlanning"], button[onclick*="window.print"] { display: none !important; }
+    body.print-week .cell { min-height: 36px !important; }
+    body.print-week .ouvrier-name-bubble { font-size: 10pt !important; padding: 4px 10px !important; border-width: 1px !important; box-shadow: none !important; }
+    /* Mode 4 semaines : tres compact, 1 page A3 */
+    body.print-full { font-size: 6pt !important; }
+    body.print-full .bulle { font-size: 5.5pt !important; padding: 1px 2px !important; border-width: 1px !important; box-shadow: none !important; line-height: 1.1; }
+    body.print-full .cell { min-height: 14px !important; padding: 0 !important; }
+    body.print-full td, body.print-full th { padding: 1px 2px !important; }
+    body.print-full td:first-child, body.print-full th:first-child { width: 50px !important; max-width: 50px !important; }
+    body.print-full .ouvrier-name-bubble { font-size: 7pt !important; padding: 1px 6px !important; border-width: 1px !important; box-shadow: none !important; }
+    body.print-full #logo-diagon { height: 12mm !important; }
+    body.print-full header { padding: 1mm 0 !important; }
+    body.print-full thead th { font-size: 6pt !important; padding: 1px 1px !important; }
+    body.print-full .dup-btns, body.print-full .dup-btn { display: none !important; }
+    /* Cache tous les boutons en print */
+    button { display: none !important; }
   }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
   .pool-area { background: repeating-linear-gradient(45deg, #f8fafc, #f8fafc 8px, #f1f5f9 8px, #f1f5f9 16px); }
@@ -244,11 +253,12 @@
       </div>
       <!-- Ligne 2 : navigation gauche | gestion centre | PDF droite -->
       <div class="flex items-center gap-3 py-2 border-t border-slate-100">
-        <!-- GAUCHE : navigation semaines -->
+        <!-- GAUCHE : navigation semaines + toggle samedi -->
         <div class="flex items-center gap-2 shrink-0">
           <button id="btn-prev" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">← Sem.</button>
           <button id="btn-today" class="px-3 py-1.5 text-sm font-medium bg-slate-800 text-white hover:bg-slate-900 rounded-md toggle-btn">Aujourd'hui</button>
           <button id="btn-next" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">Sem. →</button>
+          <button id="btn-sat" onclick="toggleSaturday()" class="px-2 py-1 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-md" title="Afficher / masquer la colonne Samedi">+ Sam</button>
         </div>
         <!-- CENTRE : gestion (couleurs alignees sur les bulles vues) -->
         <div class="flex-1 flex items-center justify-center gap-3 flex-wrap">
@@ -256,10 +266,16 @@
           <button onclick="openModal('ouvriers')"  class="px-4 py-1.5 text-sm font-semibold bg-blue-500 hover:bg-blue-600 text-white rounded-md shadow-sm"     title="Gérer les ouvriers">👷 Ouvriers</button>
           <button onclick="openModal('ressources')" class="px-4 py-1.5 text-sm font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-md shadow-sm" title="Gérer les équipements">🚚 Équipements</button>
         </div>
-        <!-- DROITE : PDF (petits, discrets) -->
-        <div class="flex items-center gap-1 shrink-0">
-          <button onclick="printPlanning('week')" class="px-2 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded" title="Imprimer la semaine courante (A3 paysage)">🖨 PDF sem.</button>
-          <button onclick="printPlanning('full')" class="px-2 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded" title="Imprimer les 4 semaines (A3 paysage)">🖨 PDF 4 sem.</button>
+        <!-- DROITE : zoom affichage + PDF (petits, discrets) -->
+        <div class="flex flex-col items-end gap-1 shrink-0">
+          <div class="flex items-center gap-1">
+            <button id="btn-screen-1w" onclick="setUserWeeks(1)" class="px-2 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded" title="Afficher 1 semaine à l'écran">📅 Vue 1 sem.</button>
+            <button id="btn-screen-4w" onclick="setUserWeeks(4)" class="px-2 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded" title="Afficher 4 semaines à l'écran">📅 Vue 4 sem.</button>
+          </div>
+          <div class="flex items-center gap-1">
+            <button onclick="printPlanning('week')" class="px-2 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded" title="Imprimer la semaine courante (A3 paysage)">🖨 PDF sem.</button>
+            <button onclick="printPlanning('full')" class="px-2 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded" title="Imprimer les 4 semaines (A3 paysage)">🖨 PDF 4 sem.</button>
+          </div>
         </div>
       </div>
     </header>
@@ -594,6 +610,8 @@ const PALETTE = [
   "bg-sky-200 text-sky-900 border-sky-300",
 ];
 let VIEW = "ouvrier"; // "ouvrier" | "chantier" | "ressources"
+let SHOW_SATURDAY = false; // samedi masque par defaut, bouton + pour ajouter
+let USER_WEEKS = null; // null = auto (4 ou 2 atelier), sinon override (1 ou 4)
 let HIDE_EMPTY_CHANTIERS = true; // masquer chantiers actifs sans affectation dans les 4 semaines visibles
 function _chantierHasAffInView(chId) {
   const isoInView = new Set(DATES.map(_localISO));
@@ -654,8 +672,19 @@ let DATES = buildDates();
 
 function buildDates() {
   const dates = [];
-  for (let w = 0; w < WEEKS; w++) for (let j = 0; j < 6; j++) dates.push(addDays(WEEK_START, w*7 + j));
+  const daysPerWeek = SHOW_SATURDAY ? 6 : 5;
+  for (let w = 0; w < WEEKS; w++) for (let j = 0; j < daysPerWeek; j++) dates.push(addDays(WEEK_START, w*7 + j));
   return dates;
+}
+function toggleSaturday() {
+  SHOW_SATURDAY = !SHOW_SATURDAY;
+  DATES = buildDates();
+  rerender();
+}
+function setUserWeeks(n) {
+  USER_WEEKS = n;
+  _setWeeksForView(VIEW);
+  rerender();
 }
 function isWeekend(d) { return d.getDay() === 6; }
 function isMondayOfWeek(d) { return d.getDay() === 1; }
@@ -680,13 +709,14 @@ function renderHeaders(firstColLabel) {
   const weekRow = document.getElementById("week-row");
   const dayRow = document.getElementById("day-row");
   const sNum0 = getWeekNumber(WEEK_START);
-  const nbWeeksView = Math.ceil(DATES.length / 6);
+  const nbWeeksView = Math.ceil(DATES.length / (SHOW_SATURDAY ? 6 : 5));
   document.querySelector("header p").textContent = "Vue " + nbWeeksView + " semaine" + (nbWeeksView > 1 ? "s" : "") + " - semaine " + sNum0 + " (" + WEEK_START.getDate() + " " + MONTHS[WEEK_START.getMonth()] + " " + WEEK_START.getFullYear() + ")";
 
   let wHtml = `<th class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-600 min-w-[200px]">${firstColLabel}</th>`;
   for (let w = 0; w < nbWeeksView; w++) {
-    const first = DATES[w*6];
-    const last = DATES[w*6+5];
+    const daysPerWk = SHOW_SATURDAY ? 6 : 5;
+    const first = DATES[w*daysPerWk];
+    const last = DATES[w*daysPerWk + (daysPerWk - 1)];
     if (!first) break;
     const sNum = getWeekNumber(first);
     const isoFirst = toISO(first);
@@ -1518,7 +1548,9 @@ function clearWeek(isoFrom, isoTo) {
 }
 
 function _setWeeksForView(v) {
-  const newWeeks = v === "atelier" ? 2 : 4;
+  let newWeeks;
+  if (USER_WEEKS !== null) newWeeks = USER_WEEKS;
+  else newWeeks = v === "atelier" ? 2 : 4;
   if (newWeeks !== WEEKS) {
     WEEKS = newWeeks;
     DATES = buildDates();
@@ -1534,7 +1566,25 @@ function setView(v) {
   if (btnAtelier) btnAtelier.classList.toggle("active", v === "atelier");
   rerender();
 }
+function _updateHeaderButtons() {
+  const btnSat = document.getElementById("btn-sat");
+  if (btnSat) {
+    btnSat.textContent = SHOW_SATURDAY ? "− Sam" : "+ Sam";
+    btnSat.className = SHOW_SATURDAY
+      ? "px-2 py-1 text-xs font-semibold bg-slate-400 hover:bg-slate-500 text-white rounded-md"
+      : "px-2 py-1 text-xs font-semibold bg-emerald-500 hover:bg-emerald-600 text-white rounded-md";
+  }
+  const btn1w = document.getElementById("btn-screen-1w");
+  const btn4w = document.getElementById("btn-screen-4w");
+  if (btn1w && btn4w) {
+    const classesActive = "px-2 py-1 text-xs font-semibold bg-slate-800 hover:bg-slate-900 text-white rounded";
+    const classesInactive = "px-2 py-1 text-xs font-medium bg-slate-100 hover:bg-slate-200 text-slate-700 rounded";
+    btn1w.className = (WEEKS === 1) ? classesActive : classesInactive;
+    btn4w.className = (WEEKS === 4) ? classesActive : classesInactive;
+  }
+}
 function rerender() {
+  _updateHeaderButtons();
   if (VIEW === "ouvrier") renderViewOuvrier();
   else if (VIEW === "atelier") renderViewAtelier();
   else if (VIEW === "chantier") renderViewChantier();
