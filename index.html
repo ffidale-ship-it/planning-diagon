@@ -126,8 +126,21 @@
   .ouvrier-name-bubble.cat-externe  { background: #fee2e2; color: #991b1b; border-color: #f87171; }
 
   /* === Adaptation cellules selon zoom 1 ou 4 semaines === */
-  body.screen-1w .cell { min-width: 140px !important; }
-  body.screen-1w .bulle { font-size: 13px !important; }
+  body.screen-1w .cell {
+    min-width: 140px !important;
+    min-height: 70px !important;
+    padding: 6px !important;
+  }
+  body.screen-1w .bulle {
+    font-size: 14px !important;
+    padding: 5px 12px !important;
+  }
+  body.screen-1w .ouvrier-name-bubble {
+    font-size: 16px !important;
+    padding: 7px 16px !important;
+  }
+  body.screen-1w td, body.screen-1w th { padding: 5px 8px; }
+  body.screen-1w .dup-btn { font-size: 10px !important; padding: 3px 7px !important; }
   body.screen-4w .cell {
     min-width: 0 !important;
     width: auto !important;
