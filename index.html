@@ -505,6 +505,7 @@ function _chantierHasAffInView(chId) {
   const isoInView = new Set(DATES.map(_localISO));
   return AFFECTATIONS.some(a => a.c === chId && isoInView.has(a.d));
 }
+function _isAtelierOnly(chId) { const c = chantierById(chId); return !!(c && c.atelier_only); }
 // Chantiers visibles dans les vues standard (par-ouvrier, par-chantier) :
 // - actif
 // - pas marque atelier_only
@@ -632,7 +633,7 @@ function renderViewOuvrier() {
         const isMonday = i > 0 && d.getDay() === 1;
         const satCls = isSat ? "cell-sat" : "";
         const sepCls = isMonday ? "week-separator" : "";
-        const aff = AFFECTATIONS.find(a => a.r === r.id && a.d === iso);
+        const aff = AFFECTATIONS.find(a => a.r === r.id && a.d === iso && !_isAtelierOnly(a.c));
         const ind = indispoAt(r.id, iso);
         let inner = "";
         if (ind) {
@@ -716,7 +717,7 @@ function renderViewChantier() {
     return `<span class="bulle cat-indispo cat-indispo-${type}" draggable="true" data-kind="indispo-chip" data-type="${type}" data-d="chip" style="cursor:grab">${info.icon} ${info.label}</span>`;
   }).join("");
   const visiblesCh = _visibleChantiers();
-  const nbActifsTotalCh = CHANTIERS.filter(c => c.actif).length;
+  const nbActifsTotalCh = CHANTIERS.filter(c => c.actif && !c.atelier_only).length;
   const nbHiddenCh = nbActifsTotalCh - visiblesCh.length;
   const hideBtnLabelCh = HIDE_EMPTY_CHANTIERS
     ? `☑ Masquer vides${nbHiddenCh > 0 ? " (" + nbHiddenCh + " masqué" + (nbHiddenCh > 1 ? "s" : "") + ")" : ""}`
@@ -733,7 +734,8 @@ function renderViewChantier() {
       <span class="text-xs font-semibold text-slate-500 mr-2">INDISPONIBILITÉS (glisser sur un ouvrier affecté) :</span>
       ${indispoChipsHtml2}
     </div>`;
-  const allChantiers = [ATELIER, ...visiblesCh];
+  // Vue Par chantier : plus de ligne ATELIER (gerée dans la vue dediee Atelier)
+  const allChantiers = [...visiblesCh];
   let html = "";
   allChantiers.forEach(ch => {
     const color = colorChantier(ch.id);
