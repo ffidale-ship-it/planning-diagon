@@ -108,6 +108,21 @@
     background: #eef2ff;
   }
 
+  /* === Tags colores categorie ouvrier === */
+  .cat-tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 5px;
+    font-size: 9px;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    text-transform: uppercase;
+    border: 1px solid;
+  }
+  .cat-tag.cat-tag-chantier { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
+  .cat-tag.cat-tag-atelier  { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
+  .cat-tag.cat-tag-externe  { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+
   @media print {
     @page {
       size: A3 landscape;
@@ -721,9 +736,9 @@ function renderViewOuvrier() {
       ${indispoChipsHtml}
     </div>`;
   const groups = {
-    "OUVRIERS CHANTIER": RESSOURCES.filter(r => r.cat === "chantier" && r.visible !== false && (r.show_chantier || r.show_atelier)),
-    "OUVRIERS ATELIER":  RESSOURCES.filter(r => r.cat === "atelier" && r.visible !== false && (r.show_chantier || r.show_atelier)),
-    "EXTERNES":          RESSOURCES.filter(r => r.cat === "externe" && r.visible !== false && (r.show_chantier || r.show_atelier)),
+    "OUVRIERS CHANTIER": RESSOURCES.filter(r => r.cat === "chantier" && r.visible !== false && r.show_chantier),
+    "AIDE ATELIER":      RESSOURCES.filter(r => r.cat === "atelier" && r.visible !== false && r.show_chantier),
+    "EXTERNES":          RESSOURCES.filter(r => r.cat === "externe" && r.visible !== false && r.show_chantier),
   };
   let html = "";
   for (const [label, list] of Object.entries(groups)) {
@@ -753,7 +768,7 @@ function renderViewOuvrier() {
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
       }).join("");
       const catLabel = r.cat === "chantier" ? "Chantier" : r.cat === "atelier" ? "Atelier" : "Externe";
-      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${ouvrierLabel(r)}</div><div class="text-[10px] text-slate-400">${catLabel}</div></td>${cells}</tr>`;
+      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800 mb-0.5">${ouvrierLabel(r)}</div><span class="cat-tag cat-tag-${r.cat}">${catLabel}</span></td>${cells}</tr>`;
     });
   }
   document.getElementById("planning-body").innerHTML = html;
@@ -803,7 +818,7 @@ function renderViewAtelier() {
       }
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
     }).join("");
-    html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${ouvrierLabel(r)}</div><div class="text-[10px] text-slate-400">Atelier</div></td>${cells}</tr>`;
+    html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800 mb-0.5">${ouvrierLabel(r)}</div><span class="cat-tag cat-tag-${r.cat}">${r.cat === 'atelier' ? 'Atelier' : r.cat === 'chantier' ? 'Chantier' : 'Externe'}</span></td>${cells}</tr>`;
   });
   if (atelierList.length === 0) {
     html = `<tr><td colspan="${DATES.length+1}" class="p-4 text-center text-slate-500 text-sm">Aucun ouvrier atelier. Ajoute-les via Gérer &gt; Ouvriers (catégorie Atelier).</td></tr>`;
