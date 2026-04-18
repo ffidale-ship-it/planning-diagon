@@ -75,21 +75,34 @@
     }
     header h1 { font-size: 14pt !important; }
     header p { font-size: 9pt !important; }
-    .flex-1.overflow-auto { overflow: visible !important; height: auto !important; }
-    main, .flex-1 { display: block !important; }
-    table { page-break-inside: auto; }
+    /* Force le layout a etre lineaire (pas de flex/scroll) */
+    .flex, .flex-1 { display: block !important; }
+    .overflow-auto, .overflow-hidden { overflow: visible !important; height: auto !important; max-height: none !important; }
+    main { display: block !important; height: auto !important; }
+    /* Tableau : largeur forcee a la page, colonnes egales */
+    table {
+      width: 100% !important;
+      table-layout: fixed !important;
+      page-break-inside: auto;
+      border-collapse: collapse !important;
+    }
     tr { page-break-inside: avoid; page-break-after: auto; }
     thead { display: table-header-group; position: static !important; box-shadow: none !important; }
     .sticky { position: static !important; }
-    .bulle {
-      font-size: 8pt !important;
-      padding: 1px 4px !important;
-      border-width: 1px !important;
-      box-shadow: none !important;
-    }
-    .dup-btns, button[onclick*="clearDay"], button[onclick*="clearWeek"], button[onclick*="openModal"] { display: none !important; }
-    body { font-size: 9pt !important; }
-    .cell { min-height: 30px !important; }
+    td, th { overflow: hidden; word-wrap: break-word; }
+    /* 1re colonne (label ressource/chantier) plus etroite pour liberer de la place */
+    td:first-child, th:first-child { width: 90px !important; min-width: 0 !important; max-width: 90px !important; }
+    /* Mode semaine : 6 colonnes, bulles plus grandes */
+    body.print-week { font-size: 10pt !important; }
+    body.print-week .bulle { font-size: 9pt !important; padding: 2px 5px !important; border-width: 1px !important; box-shadow: none !important; }
+    body.print-week .cell { min-height: 40px !important; }
+    /* Mode 4 semaines : 24 colonnes, bulles plus serrees */
+    body.print-full { font-size: 7pt !important; }
+    body.print-full .bulle { font-size: 6.5pt !important; padding: 1px 3px !important; border-width: 1px !important; box-shadow: none !important; }
+    body.print-full .cell { min-height: 25px !important; }
+    body.print-full td:first-child, body.print-full th:first-child { width: 70px !important; max-width: 70px !important; }
+    /* Cache les boutons de gestion dans les en-tetes (corbeilles, etc.) */
+    button[onclick*="clearDay"], button[onclick*="clearWeek"], button[onclick*="openModal"], button[onclick*="toggleHideEmpty"], button[onclick*="printPlanning"], button[onclick*="window.print"] { display: none !important; }
   }
   .chip { display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500; }
   .pool-area { background: repeating-linear-gradient(45deg, #f8fafc, #f8fafc 8px, #f1f5f9 8px, #f1f5f9 16px); }
@@ -153,7 +166,8 @@
         <button id="btn-today" class="px-3 py-1.5 text-sm font-medium bg-slate-800 text-white hover:bg-slate-900 rounded-md toggle-btn">Aujourd'hui</button>
         <button id="btn-next" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">Sem. →</button>
         <div class="w-px h-6 bg-slate-300"></div>
-        <button onclick="window.print()" class="px-3 py-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-md" title="Imprimer / Exporter PDF (A3 paysage)">🖨 PDF</button>
+        <button onclick="printPlanning('week')" class="px-3 py-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-md" title="Imprimer la semaine courante (A3 paysage)">🖨 PDF sem.</button>
+        <button onclick="printPlanning('full')" class="px-3 py-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-md" title="Imprimer les 4 semaines (A3 paysage)">🖨 PDF 4 sem.</button>
       </div>
     </header>
 
@@ -533,12 +547,14 @@ function renderHeaders(firstColLabel) {
   const weekRow = document.getElementById("week-row");
   const dayRow = document.getElementById("day-row");
   const sNum0 = getWeekNumber(WEEK_START);
-  document.querySelector("header p").textContent = "Vue 4 semaines - semaine " + sNum0 + " (" + WEEK_START.getDate() + " " + MONTHS[WEEK_START.getMonth()] + " " + WEEK_START.getFullYear() + ")";
+  const nbWeeksView = Math.ceil(DATES.length / 6);
+  document.querySelector("header p").textContent = "Vue " + nbWeeksView + " semaine" + (nbWeeksView > 1 ? "s" : "") + " - semaine " + sNum0 + " (" + WEEK_START.getDate() + " " + MONTHS[WEEK_START.getMonth()] + " " + WEEK_START.getFullYear() + ")";
 
   let wHtml = `<th class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 text-left font-semibold text-slate-600 min-w-[200px]">${firstColLabel}</th>`;
-  for (let w = 0; w < WEEKS; w++) {
+  for (let w = 0; w < nbWeeksView; w++) {
     const first = DATES[w*6];
     const last = DATES[w*6+5];
+    if (!first) break;
     const sNum = getWeekNumber(first);
     const isoFirst = toISO(first);
     const isoLast = toISO(last);
@@ -1258,6 +1274,27 @@ function goToday() {
   WEEK_START = addDays(now, 1 - dayOfWeek);
   DATES = buildDates();
   rerender();
+}
+
+// Impression : "week" = 1 semaine courante, "full" = 4 semaines visibles
+function printPlanning(mode) {
+  const savedDates = DATES.slice();
+  if (mode === "week") {
+    DATES = savedDates.slice(0, 6); // lundi a samedi de la 1re semaine visible
+    document.body.classList.add("print-week");
+  } else {
+    document.body.classList.add("print-full");
+  }
+  rerender();
+  // Laisser le temps au DOM de rendre avant l'impression
+  setTimeout(() => {
+    window.print();
+    // Restaurer l'etat apres fermeture du dialog d'impression
+    DATES = savedDates;
+    document.body.classList.remove("print-week");
+    document.body.classList.remove("print-full");
+    rerender();
+  }, 100);
 }
 
 // === EVENT LISTENERS ===
