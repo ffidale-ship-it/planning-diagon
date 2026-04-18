@@ -33,21 +33,54 @@ La maquette est **en production** sur GitHub Pages, utilisée par 3 personnes (F
 - Sync Firebase temps réel (pattern rerender/mutateAndSync)
 - Indicateur de connexion Firebase dans la sidebar
 
-## Ce qui reste à faire (par priorité)
+## Ce qui reste à faire (priorité révisée 2026-04-18)
 
-### Court terme
-1. **Éclater le monolithe** : le fichier unique de 134KB doit devenir un projet structuré (composants, modules)
-2. **Backend PostgreSQL** : le schéma est documenté, il faut l'implémenter avec une API REST
-3. **Authentification** : login simple pour quelques comptes
+### ORDRE DE TRAVAIL DÉCIDÉ
+Contrairement à une première version du doc, on **NE commence PAS par éclater le monolithe**.
+Raison : refactorer la maquette en composants sans backend = travail à valeur nulle pour les 3 users en prod, et double travail quand on bascule ensuite sur l'API REST.
+
+### Phase 1 — Backend local (en cours)
+Construire le backend à côté, **sans toucher la maquette qui tourne sur Firebase**.
+- Docker Compose : Postgres 16 + Next.js (TypeScript, driver `pg` natif — pas d'ORM car l'IA tapera du SQL nommé)
+- Appliquer les 3 schémas : `planning`, `fiches`, `rh` (séparation RGPD)
+- API REST minimale : CRUD sur chantiers, ressources, affectations, livraisons, besoins
+- Script one-shot de migration Firebase → Postgres (lire le JSON Firebase, insérer en SQL)
+- **La maquette continue de tourner sur Firebase pendant tout ce temps**
+
+### Phase 2 — Basculer la maquette sur l'API REST
+- Remplacer les appels Firebase par `fetch('/api/...')` dans `index.html`
+- Garder la structure single-file (pas de refactor React pour l'instant)
+- Sync temps réel : **polling 3s** (décision prise : pas besoin de < 1s pour du planning chantier)
+- Firebase reste en backup 1-2 semaines, puis débranché
+
+### Phase 3 — Authentification
+- Login simple par token (bureau + chefs d'équipe)
+- Rôles : admin / chef / lecture seule
+
+### Phase 4 — Éclater le monolithe (OPTIONNEL, à trancher plus tard)
+- À ce stade seulement, si passage nécessaire en Next.js pour la suite (mobile, check-in@work)
+- Sinon, 134 KB de HTML bien organisé peut très bien vivre
 
 ### Moyen terme
-4. **Pilotage vocal IA** : interprétation LLM des commandes vocales → appel de stored procedures
-5. **Docker** : déploiement sur NAS Synology
-6. **Check-in@Work ONSS** : déclaration obligatoire BTP Belgique
+- **Pilotage vocal IA** : interprétation LLM des commandes vocales → appel de stored procedures
+- **Docker déployé sur NAS Synology** (dev OK en local, prod sur NAS)
+- **Check-in@Work ONSS** : déclaration obligatoire BTP Belgique
 
 ### Long terme
-7. **Mobile responsive** pour les chefs d'équipe
-8. **Module RH** : pointages, heures sup (schéma `rh`, jamais exposé à l'IA)
+- **Mobile responsive** pour les chefs d'équipe
+- **Module RH** : pointages, heures sup (schéma `rh`, jamais exposé à l'IA)
+
+## Décisions techniques actées
+- **Migration Firebase** : on récupère les données existantes (3 users ont déjà rempli la maquette)
+- **Sync** : polling 3s suffisant
+- **Hébergement dev** : local sur Mac de Frans (Apple Silicon arm64) — puis NAS Synology plus tard
+- **Stack backend** : Next.js 15 + TypeScript + Postgres 16 + driver `pg` natif (pas d'ORM)
+
+## Environnement déjà en place (2026-04-18)
+- Node 24.15.0 via nvm (installé dans `~/.nvm/`)
+- Claude Code 2.1.114
+- Docker Desktop 29.4.0 + Docker Compose 5.1.1 (installé, tourne)
+- Repo cloné localement, push HTTPS fonctionnel (token à régénérer à chaque push pour l'instant — TODO : installer `gh` CLI ou configurer SSH)
 
 ## Points d'attention pour Claude Code
 
