@@ -167,6 +167,8 @@
         <button id="btn-today" class="px-3 py-1.5 text-sm font-medium bg-slate-800 text-white hover:bg-slate-900 rounded-md toggle-btn">Aujourd'hui</button>
         <button id="btn-next" class="px-3 py-1.5 text-sm font-medium bg-slate-100 hover:bg-slate-200 rounded-md toggle-btn">Sem. →</button>
         <div class="w-px h-6 bg-slate-300"></div>
+        <button onclick="openModal('chantiers')" class="px-3 py-1.5 text-sm font-medium bg-slate-200 hover:bg-slate-300 text-slate-800 rounded-md" title="Gérer tous les chantiers (Chantier / Atelier / les deux)">🏗 Gérer chantiers</button>
+        <div class="w-px h-6 bg-slate-300"></div>
         <button onclick="printPlanning('week')" class="px-3 py-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-md" title="Imprimer la semaine courante (A3 paysage)">🖨 PDF sem.</button>
         <button onclick="printPlanning('full')" class="px-3 py-1.5 text-sm font-medium bg-emerald-600 hover:bg-emerald-700 text-white rounded-md" title="Imprimer les 4 semaines (A3 paysage)">🖨 PDF 4 sem.</button>
       </div>
@@ -312,6 +314,7 @@ function loadFromFirebase(snap) {
   if (data.besoins) BESOINS = data.besoins;
   if (data.indispos) INDISPOS = data.indispos; else INDISPOS = [];
   if (data.affectations_atelier) AFFECTATIONS_ATELIER = data.affectations_atelier; else AFFECTATIONS_ATELIER = [];
+  migrateChantiersSchema();
   rerender(); // affichage seul, PAS de sync retour
 }
 
@@ -505,13 +508,32 @@ function _chantierHasAffInView(chId) {
   const isoInView = new Set(DATES.map(_localISO));
   return AFFECTATIONS.some(a => a.c === chId && isoInView.has(a.d));
 }
-function _isAtelierOnly(chId) { const c = chantierById(chId); return !!(c && c.atelier_only); }
+// Migration : derive show_chantier / show_atelier depuis les anciens champs actif / atelier_only
+function migrateChantiersSchema() {
+  CHANTIERS.forEach(c => {
+    if (c.show_chantier === undefined && c.show_atelier === undefined) {
+      if (c.atelier_only === true) {
+        c.show_chantier = false;
+        c.show_atelier = true;
+      } else if (c.actif === false) {
+        c.show_chantier = false;
+        c.show_atelier = false;
+      } else {
+        c.show_chantier = true;
+        c.show_atelier = false;
+      }
+    }
+  });
+}
+function _showsOnChantier(c) { return !!(c && c.show_chantier); }
+function _showsOnAtelier(c)  { return !!(c && c.show_atelier); }
+function _isAtelierOnly(chId) { const c = chantierById(chId); return !!(c && c.show_atelier && !c.show_chantier); }
 // Chantiers visibles dans les vues standard (par-ouvrier, par-chantier) :
 // - actif
 // - pas marque atelier_only
 // - (optionnel) a au moins une affectation dans les 4 semaines
 function _visibleChantiers() {
-  return CHANTIERS.filter(c => c.actif && !c.atelier_only && (!HIDE_EMPTY_CHANTIERS || _chantierHasAffInView(c.id)));
+  return CHANTIERS.filter(c => c.show_chantier && (!HIDE_EMPTY_CHANTIERS || _chantierHasAffInView(c.id)));
 }
 function toggleHideEmpty() {
   HIDE_EMPTY_CHANTIERS = !HIDE_EMPTY_CHANTIERS;
@@ -592,7 +614,7 @@ function renderViewOuvrier() {
   renderHeaders("Ressource");
   const visibles = _visibleChantiers();
   const actifs = [ATELIER, ...visibles];
-  const nbActifsTotal = CHANTIERS.filter(c => c.actif).length;
+  const nbActifsTotal = CHANTIERS.filter(c => c.show_chantier).length;
   const nbHidden = nbActifsTotal - visibles.length;
   const chipsHtml = actifs.map(c => {
     const label = c.id === 0 ? "ATELIER" : c.id + " - " + c.nom;
@@ -610,7 +632,6 @@ function renderViewOuvrier() {
       <span class="text-xs font-semibold text-slate-500 mr-2">CHANTIERS ACTIFS (glisser sur une cellule vide) :</span>
       ${chipsHtml}
       ${hideBtnHtml}
-      <button onclick="openModal('chantiers')" class="ml-2 text-xs text-blue-600 hover:text-blue-800 font-medium underline">Gérer</button>
     </div>
     <div class="flex items-center gap-2 flex-wrap mt-1">
       <span class="text-xs font-semibold text-slate-500 mr-2">INDISPONIBILITÉS (glisser sur le jour concerné) :</span>
@@ -658,16 +679,15 @@ function renderViewOuvrier() {
 function renderViewAtelier() {
   renderHeaders("Ressource atelier");
   // Chantiers utilisables en atelier : tous les actifs (y compris atelier_only)
-  const chantiersAtelier = CHANTIERS.filter(c => c.actif);
-  const chipsHtml = [ATELIER, ...chantiersAtelier].map(c => {
-    const label = c.id === 0 ? "ATELIER" : c.id + " - " + c.nom + (c.atelier_only ? " 🔧" : "");
+  const chantiersAtelier = CHANTIERS.filter(c => c.show_atelier);
+  const chipsHtml = chantiersAtelier.map(c => {
+    const label = c.id + " - " + c.nom + (c.show_chantier ? "" : " 🔧");
     return `<span class="bulle ${colorChantier(c.id)}" draggable="true" data-kind="chantier-chip" data-c="${c.id}" data-d="chip" style="cursor:grab">${label}</span>`;
   }).join("");
   document.getElementById("context-bar").innerHTML = `
     <div class="flex items-center gap-2 flex-wrap">
       <span class="text-xs font-semibold text-slate-500 mr-2">CHANTIERS ATELIER (plusieurs par jour OK) :</span>
       ${chipsHtml}
-      <button onclick="openModal('chantiers')" class="ml-2 text-xs text-blue-600 hover:text-blue-800 font-medium underline">Gérer</button>
     </div>
     <div class="flex items-center gap-2 flex-wrap mt-1">
       <span class="text-xs font-semibold text-slate-500 mr-2">Astuce :</span>
@@ -717,7 +737,7 @@ function renderViewChantier() {
     return `<span class="bulle cat-indispo cat-indispo-${type}" draggable="true" data-kind="indispo-chip" data-type="${type}" data-d="chip" style="cursor:grab">${info.icon} ${info.label}</span>`;
   }).join("");
   const visiblesCh = _visibleChantiers();
-  const nbActifsTotalCh = CHANTIERS.filter(c => c.actif && !c.atelier_only).length;
+  const nbActifsTotalCh = CHANTIERS.filter(c => c.show_chantier).length;
   const nbHiddenCh = nbActifsTotalCh - visiblesCh.length;
   const hideBtnLabelCh = HIDE_EMPTY_CHANTIERS
     ? `☑ Masquer vides${nbHiddenCh > 0 ? " (" + nbHiddenCh + " masqué" + (nbHiddenCh > 1 ? "s" : "") + ")" : ""}`
@@ -813,7 +833,7 @@ function renderViewRessources() {
       <span class="bulle cat-besoin text-[10px]" style="cursor:default">besoin</span>
       <button onclick="openModal('ressources')" class="ml-auto text-xs text-blue-600 hover:text-blue-800 font-medium underline">Gérer</button>
     </div>`;
-  const allChantiers = [ATELIER, ...CHANTIERS.filter(c => c.actif)];
+  const allChantiers = [ATELIER, ...CHANTIERS.filter(c => c.show_chantier || c.show_atelier)];
   let html = "";
   allChantiers.forEach(ch => {
     const besoinsCh = BESOINS.filter(b => b.c === ch.id);
@@ -921,32 +941,38 @@ function openModal(mode) {
   const hint = document.getElementById("modal-hint");
 
   if (MODAL_MODE === "chantiers") {
-    const isAtelierCtx = VIEW === "atelier";
-    const relevantCh = CHANTIERS.filter(c => isAtelierCtx ? c.atelier_only : !c.atelier_only);
-    title.textContent = isAtelierCtx ? "Gérer les travaux atelier" : "Gérer les chantiers";
-    hint.innerHTML = isAtelierCtx
-      ? "Travaux internes / spécifiques atelier (pliage, soudure pour tiers…). Le bouton 🔧 les déplace vers les chantiers classiques."
-      : "Coche = chantier affiché dans le planning. 🔧 = déplacer vers travaux atelier (invisible ici).";
-    const rowsCh = relevantCh.map(c => `
-      <div class="flex items-center gap-2 py-1 px-2 hover:bg-slate-50 rounded" data-chid="${c.id}">
-        <input type="checkbox" data-id="${c.id}" ${c.actif ? "checked" : ""} class="rounded">
-        <button onclick="toggleAtelierOnly(${c.id})" class="text-base leading-none ${c.atelier_only ? 'text-orange-500' : 'text-slate-300 hover:text-slate-500'}" title="${c.atelier_only ? 'Deplacer vers Chantiers classiques' : 'Deplacer vers Travaux atelier'}">🔧</button>
+    title.textContent = "Gérer les chantiers";
+    hint.innerHTML = "Coche <b>🏗 Chantier</b> pour le voir dans Par ouvrier / Par chantier. Coche <b>🔧 Atelier</b> pour le voir dans la vue Atelier. Les deux = visible partout. Ni l'un ni l'autre = archivé.";
+    const rowsCh = CHANTIERS.map(c => {
+      const archived = !c.show_chantier && !c.show_atelier;
+      return `
+      <div class="flex items-center gap-2 py-1 px-2 hover:bg-slate-50 rounded ${archived ? 'opacity-50' : ''}" data-chid="${c.id}">
+        <label class="flex items-center gap-1 text-xs cursor-pointer" title="Afficher dans Par ouvrier / Par chantier">
+          <input type="checkbox" onchange="setChantierScope(${c.id}, 'chantier', this.checked)" ${c.show_chantier ? "checked" : ""} class="rounded">
+          <span class="text-base leading-none">🏗</span>
+        </label>
+        <label class="flex items-center gap-1 text-xs cursor-pointer mr-2" title="Afficher dans la vue Atelier">
+          <input type="checkbox" onchange="setChantierScope(${c.id}, 'atelier', this.checked)" ${c.show_atelier ? "checked" : ""} class="rounded">
+          <span class="text-base leading-none">🔧</span>
+        </label>
         <span class="text-xs font-mono text-slate-400 w-10">${c.id}</span>
         <span class="text-xs text-slate-500 w-28 truncate">${c.client}</span>
         <span class="text-sm text-slate-800 flex-1">${c.nom}</span>
         <button onclick="removeChantier(${c.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer définitivement">&minus;</button>
-      </div>
-    `).join("");
-    const emptyMsg = relevantCh.length === 0
-      ? `<p class="text-sm text-slate-400 italic p-2">${isAtelierCtx ? "Aucun travail atelier pour l'instant." : "Aucun chantier."}</p>`
-      : "";
-    list.innerHTML = emptyMsg + rowsCh + `
+      </div>`;
+    }).join("");
+    list.innerHTML = rowsCh + `
       <div class="border-t border-slate-200 mt-3 pt-3">
-        <p class="text-xs font-semibold text-slate-600 mb-2">${isAtelierCtx ? "Ajouter un travail atelier" : "Ajouter un chantier"}</p>
-        <div class="flex items-center gap-2">
-          <input id="new-ch-client" type="text" placeholder="${isAtelierCtx ? 'Client / Origine' : 'Client'}" class="w-32 text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
-          <input id="new-ch-nom" type="text" placeholder="${isAtelierCtx ? 'Description (ex: Pliage)' : 'Nom du chantier'}" class="flex-1 text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
-          <input id="new-ch-atelier" type="checkbox" class="hidden" ${isAtelierCtx ? "checked" : ""}>
+        <p class="text-xs font-semibold text-slate-600 mb-2">Ajouter un chantier</p>
+        <div class="flex items-center gap-2 flex-wrap">
+          <input id="new-ch-client" type="text" placeholder="Client (ex: ULC)" class="w-32 text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <input id="new-ch-nom" type="text" placeholder="Nom / description" class="flex-1 text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Par ouvrier / Par chantier">
+            <input id="new-ch-chantier" type="checkbox" checked class="rounded"> 🏗
+          </label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Atelier">
+            <input id="new-ch-atelier" type="checkbox" class="rounded"> 🔧
+          </label>
           <button onclick="addChantier()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1.5 text-sm font-semibold">+</button>
         </div>
       </div>`;
@@ -1018,15 +1044,8 @@ function closeModal() {
 }
 
 function applyModalSelection() {
-  if (MODAL_MODE === "chantiers") {
-    document.querySelectorAll("#modal-list input[type=checkbox]").forEach(inp => {
-      const id = parseInt(inp.dataset.id);
-      const c = CHANTIERS.find(x => x.id === id);
-      if (c) c.actif = inp.checked;
-    });
-  }
+  // Toutes les modifications sont desormais en live (setChantierScope, toggleChef, etc.)
   closeModal();
-  mutateAndSync();
 }
 
 // --- CRUD Ouvriers ---
@@ -1058,20 +1077,24 @@ function toggleChef(id) {
 
 // --- CRUD Chantiers ---
 let _nextChId = 500;
-function toggleAtelierOnly(id) {
+function setChantierScope(id, scope, checked) {
   const c = CHANTIERS.find(x => x.id === id);
   if (!c) return;
-  c.atelier_only = !c.atelier_only;
-  openModal("chantiers");
+  if (scope === "chantier") c.show_chantier = checked;
+  else if (scope === "atelier") c.show_atelier = checked;
+  // Rerender modal to update archived opacity + planning views
   mutateAndSync();
+  openModal("chantiers");
 }
 function addChantier() {
   const client = document.getElementById("new-ch-client").value.trim();
   const nom = document.getElementById("new-ch-nom").value.trim();
-  const atelier_only = document.getElementById("new-ch-atelier").checked;
+  const show_chantier = document.getElementById("new-ch-chantier").checked;
+  const show_atelier = document.getElementById("new-ch-atelier").checked;
   if (!nom || !client) { alert("Entrez client et nom"); return; }
+  if (!show_chantier && !show_atelier) { alert("Cochez au moins 🏗 Chantier ou 🔧 Atelier."); return; }
   while (CHANTIERS.find(c => c.id === _nextChId) || _nextChId < 500) _nextChId++;
-  CHANTIERS.push({ id: _nextChId++, client, nom, actif: true, atelier_only });
+  CHANTIERS.push({ id: _nextChId++, client, nom, show_chantier, show_atelier });
   openModal("chantiers");
   mutateAndSync();
 }
