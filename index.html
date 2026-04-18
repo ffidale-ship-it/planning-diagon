@@ -573,11 +573,18 @@ function renderViewChantier() {
   const ouvriersHtml = RESSOURCES.filter(r => r.visible !== false).map(r => {
     return `<span class="bulle cat-${r.cat}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="-1" data-d="pool" style="cursor:grab">${r.nom}</span>`;
   }).join("");
+  const indispoChipsHtml2 = Object.entries(INDISPO_TYPES).map(([type, info]) => {
+    return `<span class="bulle cat-indispo cat-indispo-${type}" draggable="true" data-kind="indispo-chip" data-type="${type}" data-d="chip" style="cursor:grab">${info.icon} ${info.label}</span>`;
+  }).join("");
   document.getElementById("context-bar").innerHTML = `
     <div class="flex items-center gap-2 flex-wrap">
       <span class="text-xs font-semibold text-slate-500 mr-2">OUVRIERS (glisser sur une cellule) :</span>
       ${ouvriersHtml}
       <button onclick="openModal('ouvriers')" class="ml-2 text-xs text-blue-600 hover:text-blue-800 font-medium underline">Gérer</button>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap mt-1">
+      <span class="text-xs font-semibold text-slate-500 mr-2">INDISPONIBILITÉS (glisser sur un ouvrier affecté) :</span>
+      ${indispoChipsHtml2}
     </div>`;
   const allChantiers = [ATELIER, ...CHANTIERS.filter(c => c.actif)];
   let html = "";
@@ -623,7 +630,7 @@ function renderViewChantier() {
         const info = INDISPO_TYPES[ind.type] || { label: ind.type, icon: "" };
         return `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${r.nom} - ${info.label}">${info.icon} ${r.nom}</span>`;
       }).join("");
-      return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls}" data-d="${iso}">${bulles}</td>`;
+      return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-d="${iso}">${bulles}</td>`;
     }).join("");
     html += `<tr><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-xs text-slate-500 italic">(ouvriers off)</div></td>${indispoCells}</tr>`;
   }
@@ -993,9 +1000,40 @@ function handleDrop(zone) {
     mutateAndSync(); return;
   }
   if (dragged.kind === "indispo-chip" || dragged.kind === "indispo") {
-    if (VIEW !== "ouvrier") { rerender(); return; }
-    const newR = parseInt(zone.dataset.r);
+    let newR = null;
     const type = dragged.type;
+    if (VIEW === "ouvrier") {
+      newR = parseInt(zone.dataset.r);
+    } else if (VIEW === "chantier") {
+      if (dragged.kind === "indispo") {
+        // Deplacement d'un indispo existant : on garde le meme ouvrier, nouveau jour
+        newR = dragged.r;
+      } else {
+        // Chip depose : on doit identifier quel ouvrier. Cellule chantier = ouvriers affectes ce jour.
+        const targetC = zone.dataset.c ? parseInt(zone.dataset.c) : null;
+        let candidates = [];
+        if (targetC !== null) {
+          candidates = AFFECTATIONS.filter(a => a.c === targetC && a.d === newD && !indispoAt(a.r, newD));
+        }
+        if (candidates.length === 0) {
+          alert("Pas d'ouvrier affecte sur cette cellule ce jour-la : impossible de creer une indispo ici.");
+          rerender(); return;
+        }
+        if (candidates.length === 1) {
+          newR = candidates[0].r;
+        } else {
+          const msg = "Plusieurs ouvriers affectes. Lequel est en " + (INDISPO_TYPES[type] ? INDISPO_TYPES[type].label : type) + " ?\n" +
+            candidates.map((c, i) => (i+1) + ". " + (ressourceById(c.r) ? ressourceById(c.r).nom : "?")).join("\n") + "\n\nEntrez le numero :";
+          const choice = prompt(msg);
+          if (!choice) { rerender(); return; }
+          const idx = parseInt(choice) - 1;
+          if (isNaN(idx) || idx < 0 || idx >= candidates.length) { rerender(); return; }
+          newR = candidates[idx].r;
+        }
+      }
+    } else {
+      rerender(); return;
+    }
     // Si deplacement d'un indispo existant : retirer l'ancien
     if (dragged.kind === "indispo" && dragged.d !== "pool") {
       INDISPOS = INDISPOS.filter(i => !(i.r === dragged.r && i.d === dragged.d));
