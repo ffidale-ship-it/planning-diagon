@@ -167,6 +167,7 @@
         <div class="flex items-center gap-2"><span class="bulle cat-chantier">Nom</span><span class="text-slate-600">Ouvrier chantier</span></div>
         <div class="flex items-center gap-2"><span class="bulle cat-atelier">Nom</span><span class="text-slate-600">Ouvrier atelier</span></div>
         <div class="flex items-center gap-2"><span class="bulle cat-externe">Nom</span><span class="text-slate-600">Intérim / S-traitant</span></div>
+        <div class="flex items-center gap-2"><span class="bulle cat-chantier">⭐ Nom</span><span class="text-slate-600">Chef d'équipe</span></div>
       </div>
     </div>
 
@@ -325,20 +326,21 @@ let CHANTIERS = [
 const ATELIER = { id: 0, client: "Interne", nom: "ATELIER DIAGON", actif: true };
 
 let RESSOURCES = [
-  { id: 1,  nom: "Enrique",      cat: "chantier" },
+  { id: 1,  nom: "Enrique",      cat: "chantier", chef: true  },
   { id: 2,  nom: "Jordan",       cat: "chantier" },
-  { id: 3,  nom: "Adel",         cat: "chantier" },
+  { id: 3,  nom: "Adel",         cat: "chantier", chef: true  },
   { id: 4,  nom: "Yassin",       cat: "chantier" },
-  { id: 5,  nom: "Romuald",      cat: "chantier" },
+  { id: 5,  nom: "Romuald",      cat: "chantier", chef: true  },
   { id: 6,  nom: "Joseph",       cat: "chantier" },
   { id: 7,  nom: "Mickaël",      cat: "chantier" },
   { id: 8,  nom: "Eyden",        cat: "chantier" },
-  { id: 11, nom: "Adrien",       cat: "atelier"  },
+  { id: 11, nom: "Adrien",       cat: "atelier",  chef: true  },
   { id: 12, nom: "Christian",    cat: "atelier"  },
   { id: 13, nom: "Aron",         cat: "atelier"  },
   { id: 90, nom: "Intérim 1",    cat: "externe"  },
   { id: 91, nom: "S-traitant A", cat: "externe"  },
 ];
+function ouvrierLabel(r) { return (r && r.chef ? "⭐ " : "") + (r ? r.nom : "?"); }
 
 let AFFECTATIONS = [
   // Semaine 1
@@ -582,7 +584,7 @@ function renderViewOuvrier() {
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
       }).join("");
       const catLabel = r.cat === "chantier" ? "Chantier" : r.cat === "atelier" ? "Atelier" : "Externe";
-      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${r.nom}</div><div class="text-[10px] text-slate-400">${catLabel}</div></td>${cells}</tr>`;
+      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${ouvrierLabel(r)}</div><div class="text-[10px] text-slate-400">${catLabel}${r.chef ? " · Chef" : ""}</div></td>${cells}</tr>`;
     });
   }
   document.getElementById("planning-body").innerHTML = html;
@@ -591,7 +593,7 @@ function renderViewOuvrier() {
 function renderViewChantier() {
   renderHeaders("Chantier");
   const ouvriersHtml = RESSOURCES.filter(r => r.visible !== false).map(r => {
-    return `<span class="bulle cat-${r.cat}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="-1" data-d="pool" style="cursor:grab">${r.nom}</span>`;
+    return `<span class="bulle cat-${r.cat}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="-1" data-d="pool" style="cursor:grab" title="${r.chef ? 'Chef equipe' : ''}">${ouvrierLabel(r)}</span>`;
   }).join("");
   const indispoChipsHtml2 = Object.entries(INDISPO_TYPES).map(([type, info]) => {
     return `<span class="bulle cat-indispo cat-indispo-${type}" draggable="true" data-kind="indispo-chip" data-type="${type}" data-d="chip" style="cursor:grab">${info.icon} ${info.label}</span>`;
@@ -627,10 +629,15 @@ function renderViewChantier() {
       const sepCls = isMonday ? "week-separator" : "";
       // Exclut les affectations d'ouvriers indisponibles ce jour-la (coherence donnees)
       const inCell = AFFECTATIONS.filter(a => a.c === ch.id && a.d === iso && !indispoAt(a.r, iso));
+      // Chef en premier pour lisibilite
+      inCell.sort((a, b) => {
+        const ra = ressourceById(a.r), rb = ressourceById(b.r);
+        return (rb && rb.chef ? 1 : 0) - (ra && ra.chef ? 1 : 0);
+      });
       const bulles = inCell.map(a => {
         const r = ressourceById(a.r);
         if (!r) return "";
-        return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.nom}">${r.nom}</span>`;
+        return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${r.nom}">${ouvrierLabel(r)}</span>`;
       }).join("");
       const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button></div>` : "";
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${bulles}${dupBtns}</td>`;
@@ -656,7 +663,7 @@ function renderViewChantier() {
         const r = ressourceById(ind.r);
         if (!r) return "";
         const info = INDISPO_TYPES[ind.type] || { label: ind.type, icon: "" };
-        return `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${r.nom} - ${info.label}">${info.icon} ${r.nom}</span>`;
+        return `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${r.nom} - ${info.label}">${info.icon} ${ouvrierLabel(r)}</span>`;
       }).join("");
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-d="${iso}">${bulles}</td>`;
     }).join("");
@@ -811,6 +818,7 @@ function openModal(mode) {
     const cats = { chantier: "Chantier", atelier: "Atelier", externe: "Externe" };
     const rows = RESSOURCES.map(r => `
       <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded group" data-res-id="${r.id}">
+        <button onclick="toggleChef(${r.id})" class="text-lg leading-none ${r.chef ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500'}" title="${r.chef ? 'Retirer chef equipe' : 'Marquer chef equipe'}">${r.chef ? "⭐" : "☆"}</button>
         <span class="text-sm font-semibold text-slate-800 flex-1">${r.nom}</span>
         <span class="text-xs text-slate-500 w-20">${cats[r.cat] || r.cat}</span>
         <button onclick="removeOuvrier(${r.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer">&minus;</button>
@@ -899,6 +907,13 @@ function removeOuvrier(id) {
   if (!confirm("Supprimer " + r.nom + " et toutes ses affectations ?")) return;
   RESSOURCES.splice(RESSOURCES.indexOf(r), 1);
   AFFECTATIONS = AFFECTATIONS.filter(a => a.r !== id);
+  openModal("ouvriers");
+  mutateAndSync();
+}
+function toggleChef(id) {
+  const r = RESSOURCES.find(x => x.id === id);
+  if (!r) return;
+  r.chef = !r.chef;
   openModal("ouvriers");
   mutateAndSync();
 }
