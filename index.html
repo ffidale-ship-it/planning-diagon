@@ -108,20 +108,22 @@
     background: #eef2ff;
   }
 
-  /* === Tags colores categorie ouvrier === */
-  .cat-tag {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 5px;
-    font-size: 9px;
+  /* === Bulle identite ouvrier (ligne sticky gauche) === */
+  .ouvrier-name-bubble {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    padding: 5px 13px;
+    border-radius: 999px;
     font-weight: 700;
-    letter-spacing: 0.5px;
-    text-transform: uppercase;
-    border: 1px solid;
+    font-size: 14px;
+    border: 2px solid;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.05);
+    letter-spacing: 0.2px;
   }
-  .cat-tag.cat-tag-chantier { background: #dbeafe; color: #1e40af; border-color: #93c5fd; }
-  .cat-tag.cat-tag-atelier  { background: #e0e7ff; color: #3730a3; border-color: #a5b4fc; }
-  .cat-tag.cat-tag-externe  { background: #fee2e2; color: #991b1b; border-color: #fca5a5; }
+  .ouvrier-name-bubble.cat-chantier { background: #dbeafe; color: #1e40af; border-color: #60a5fa; }
+  .ouvrier-name-bubble.cat-atelier  { background: #e0e7ff; color: #3730a3; border-color: #818cf8; }
+  .ouvrier-name-bubble.cat-externe  { background: #fee2e2; color: #991b1b; border-color: #f87171; }
 
   @media print {
     @page {
@@ -767,8 +769,7 @@ function renderViewOuvrier() {
         }
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
       }).join("");
-      const catLabel = r.cat === "chantier" ? "Chantier" : r.cat === "atelier" ? "Atelier" : "Externe";
-      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800 mb-0.5">${ouvrierLabel(r)}</div><span class="cat-tag cat-tag-${r.cat}">${catLabel}</span></td>${cells}</tr>`;
+      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><span class="ouvrier-name-bubble cat-${r.cat}">${ouvrierLabel(r)}</span></td>${cells}</tr>`;
     });
   }
   document.getElementById("planning-body").innerHTML = html;
@@ -818,7 +819,7 @@ function renderViewAtelier() {
       }
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
     }).join("");
-    html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800 mb-0.5">${ouvrierLabel(r)}</div><span class="cat-tag cat-tag-${r.cat}">${r.cat === 'atelier' ? 'Atelier' : r.cat === 'chantier' ? 'Chantier' : 'Externe'}</span></td>${cells}</tr>`;
+    html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><span class="ouvrier-name-bubble cat-${r.cat}">${ouvrierLabel(r)}</span></td>${cells}</tr>`;
   });
   if (atelierList.length === 0) {
     html = `<tr><td colspan="${DATES.length+1}" class="p-4 text-center text-slate-500 text-sm">Aucun ouvrier atelier. Ajoute-les via Gérer &gt; Ouvriers (catégorie Atelier).</td></tr>`;
