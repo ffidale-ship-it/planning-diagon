@@ -159,6 +159,7 @@
         <div class="flex rounded-md overflow-hidden border border-slate-300">
           <button id="btn-view-ouvrier"  class="toggle-btn px-3 py-1.5 text-sm font-medium active">👷 Par ouvrier</button>
           <button id="btn-view-chantier" class="toggle-btn px-3 py-1.5 text-sm font-medium">🏗️ Par chantier</button>
+          <button id="btn-view-atelier"  class="toggle-btn px-3 py-1.5 text-sm font-medium">🔧 Atelier</button>
           <button id="btn-view-ressources" class="toggle-btn px-3 py-1.5 text-sm font-medium">🚚 Par ressources</button>
         </div>
         <div class="w-px h-6 bg-slate-300"></div>
@@ -288,6 +289,7 @@ function syncToFirebase() {
     livraisons: LIVRAISONS,
     besoins: BESOINS,
     indispos: INDISPOS,
+    affectations_atelier: AFFECTATIONS_ATELIER,
   };
   const json = JSON.stringify(payload);
   if (json === _lastSyncJson) return;
@@ -309,6 +311,7 @@ function loadFromFirebase(snap) {
   if (data.livraisons) LIVRAISONS = data.livraisons;
   if (data.besoins) BESOINS = data.besoins;
   if (data.indispos) INDISPOS = data.indispos; else INDISPOS = [];
+  if (data.affectations_atelier) AFFECTATIONS_ATELIER = data.affectations_atelier; else AFFECTATIONS_ATELIER = [];
   rerender(); // affichage seul, PAS de sync retour
 }
 
@@ -327,6 +330,7 @@ DB_REF.once("value", snap => {
       livraisons: LIVRAISONS,
       besoins: BESOINS,
       indispos: INDISPOS,
+      affectations_atelier: AFFECTATIONS_ATELIER,
     });
   }
   _firebaseReady = true; // maintenant le sync est autorisé
@@ -394,6 +398,8 @@ let RESSOURCES = [
 ];
 function ouvrierLabel(r) { return (r && r.chef ? "⭐ " : "") + (r ? r.nom : "?"); }
 
+// Affectations atelier : {r, c, d} - plusieurs entrees possibles pour meme (r, d)
+let AFFECTATIONS_ATELIER = [];
 let AFFECTATIONS = [
   // Semaine 1
   { r: 1, c: 385, d: "2026-04-13" }, { r: 1, c: 385, d: "2026-04-14" }, { r: 1, c: 385, d: "2026-04-15" }, { r: 1, c: 385, d: "2026-04-16" }, { r: 1, c: 385, d: "2026-04-17" },
@@ -499,8 +505,12 @@ function _chantierHasAffInView(chId) {
   const isoInView = new Set(DATES.map(_localISO));
   return AFFECTATIONS.some(a => a.c === chId && isoInView.has(a.d));
 }
+// Chantiers visibles dans les vues standard (par-ouvrier, par-chantier) :
+// - actif
+// - pas marque atelier_only
+// - (optionnel) a au moins une affectation dans les 4 semaines
 function _visibleChantiers() {
-  return CHANTIERS.filter(c => c.actif && (!HIDE_EMPTY_CHANTIERS || _chantierHasAffInView(c.id)));
+  return CHANTIERS.filter(c => c.actif && !c.atelier_only && (!HIDE_EMPTY_CHANTIERS || _chantierHasAffInView(c.id)));
 }
 function toggleHideEmpty() {
   HIDE_EMPTY_CHANTIERS = !HIDE_EMPTY_CHANTIERS;
@@ -514,7 +524,7 @@ let WEEK_START = (() => {
   monday.setDate(now.getDate() + 1 - dayOfWeek);
   return monday;
 })();
-const WEEKS = 4;
+let WEEKS = 4; // 4 pour les vues standard, 2 pour la vue atelier
 const DAYS = ["Lun","Mar","Mer","Jeu","Ven","Sam"];
 let DATES = buildDates();
 
@@ -640,6 +650,59 @@ function renderViewOuvrier() {
       const catLabel = r.cat === "chantier" ? "Chantier" : r.cat === "atelier" ? "Atelier" : "Externe";
       html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${ouvrierLabel(r)}</div><div class="text-[10px] text-slate-400">${catLabel}${r.chef ? " · Chef" : ""}</div></td>${cells}</tr>`;
     });
+  }
+  document.getElementById("planning-body").innerHTML = html;
+}
+
+function renderViewAtelier() {
+  renderHeaders("Ressource atelier");
+  // Chantiers utilisables en atelier : tous les actifs (y compris atelier_only)
+  const chantiersAtelier = CHANTIERS.filter(c => c.actif);
+  const chipsHtml = [ATELIER, ...chantiersAtelier].map(c => {
+    const label = c.id === 0 ? "ATELIER" : c.id + " - " + c.nom + (c.atelier_only ? " 🔧" : "");
+    return `<span class="bulle ${colorChantier(c.id)}" draggable="true" data-kind="chantier-chip" data-c="${c.id}" data-d="chip" style="cursor:grab">${label}</span>`;
+  }).join("");
+  document.getElementById("context-bar").innerHTML = `
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="text-xs font-semibold text-slate-500 mr-2">CHANTIERS ATELIER (plusieurs par jour OK) :</span>
+      ${chipsHtml}
+      <button onclick="openModal('chantiers')" class="ml-2 text-xs text-blue-600 hover:text-blue-800 font-medium underline">Gérer</button>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap mt-1">
+      <span class="text-xs font-semibold text-slate-500 mr-2">Astuce :</span>
+      <span class="text-xs text-slate-600">empile autant de chantiers que nécessaire sur une même journée. Double-clic sur une bulle pour la retirer.</span>
+    </div>`;
+  const atelierList = RESSOURCES.filter(r => r.cat === "atelier" && r.visible !== false);
+  let html = "";
+  atelierList.forEach(r => {
+    const cells = DATES.map((d, i) => {
+      const iso = toISO(d);
+      const isToday = iso === TODAY;
+      const isSat = isWeekend(d);
+      const isMonday = i > 0 && d.getDay() === 1;
+      const satCls = isSat ? "cell-sat" : "";
+      const sepCls = isMonday ? "week-separator" : "";
+      const ind = indispoAt(r.id, iso);
+      let inner = "";
+      if (ind) {
+        const info = INDISPO_TYPES[ind.type] || { label: ind.type, icon: "" };
+        inner = `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${info.label} - double-clic pour retirer">${info.icon} ${info.label}</span>`;
+      } else {
+        const affs = AFFECTATIONS_ATELIER.filter(a => a.r === r.id && a.d === iso);
+        inner = affs.map(a => {
+          const ch = chantierById(a.c);
+          if (!ch) return "";
+          const color = colorChantier(a.c);
+          const lbl = ch.id === 0 ? "Atelier" : ch.nom;
+          return `<span class="bulle ${color}" draggable="true" data-kind="atelier-aff" data-r="${r.id}" data-c="${a.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + ch.client + ' - ' + ch.nom} - double-clic pour retirer">${lbl}</span>`;
+        }).join("");
+      }
+      return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
+    }).join("");
+    html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${ouvrierLabel(r)}</div><div class="text-[10px] text-slate-400">Atelier${r.chef ? " · Chef" : ""}</div></td>${cells}</tr>`;
+  });
+  if (atelierList.length === 0) {
+    html = `<tr><td colspan="${DATES.length+1}" class="p-4 text-center text-slate-500 text-sm">Aucun ouvrier atelier. Ajoute-les via Gérer &gt; Ouvriers (catégorie Atelier).</td></tr>`;
   }
   document.getElementById("planning-body").innerHTML = html;
 }
@@ -856,16 +919,28 @@ function openModal(mode) {
   const hint = document.getElementById("modal-hint");
 
   if (MODAL_MODE === "chantiers") {
-    title.textContent = "Gérer les chantiers actifs";
-    hint.textContent = "Cochez les chantiers à afficher. Les décochés restent en base.";
-    list.innerHTML = CHANTIERS.map(c => `
-      <label class="flex items-center gap-2 py-1 px-2 hover:bg-slate-50 rounded cursor-pointer">
+    title.textContent = "Gérer les chantiers";
+    hint.innerHTML = "Coche = chantier affiché dans le planning. 🔧 = chantier <b>atelier uniquement</b> (invisible en vue Par ouvrier / Par chantier).";
+    const rowsCh = CHANTIERS.map(c => `
+      <div class="flex items-center gap-2 py-1 px-2 hover:bg-slate-50 rounded" data-chid="${c.id}">
         <input type="checkbox" data-id="${c.id}" ${c.actif ? "checked" : ""} class="rounded">
+        <button onclick="toggleAtelierOnly(${c.id})" class="text-base leading-none ${c.atelier_only ? 'text-orange-500' : 'text-slate-300 hover:text-slate-500'}" title="${c.atelier_only ? 'Retirer usage atelier uniquement' : 'Marquer atelier uniquement'}">🔧</button>
         <span class="text-xs font-mono text-slate-400 w-10">${c.id}</span>
         <span class="text-xs text-slate-500 w-28 truncate">${c.client}</span>
         <span class="text-sm text-slate-800 flex-1">${c.nom}</span>
-      </label>
+        <button onclick="removeChantier(${c.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer définitivement">&minus;</button>
+      </div>
     `).join("");
+    list.innerHTML = rowsCh + `
+      <div class="border-t border-slate-200 mt-3 pt-3">
+        <p class="text-xs font-semibold text-slate-600 mb-2">Ajouter un chantier</p>
+        <div class="flex items-center gap-2">
+          <input id="new-ch-client" type="text" placeholder="Client (ex: ULC)" class="w-32 text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <input id="new-ch-nom" type="text" placeholder="Nom du chantier" class="flex-1 text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
+          <label class="flex items-center gap-1 text-xs text-slate-600" title="Usage atelier uniquement"><input id="new-ch-atelier" type="checkbox" class="rounded"> 🔧</label>
+          <button onclick="addChantier()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1.5 text-sm font-semibold">+</button>
+        </div>
+      </div>`;
   } else if (MODAL_MODE === "ouvriers") {
     title.textContent = "Gérer les ouvriers";
     hint.textContent = "Ajoutez ou supprimez des ouvriers. Les affectations liées sont supprimées avec l'ouvrier.";
@@ -972,6 +1047,39 @@ function toggleChef(id) {
   mutateAndSync();
 }
 
+// --- CRUD Chantiers ---
+let _nextChId = 500;
+function toggleAtelierOnly(id) {
+  const c = CHANTIERS.find(x => x.id === id);
+  if (!c) return;
+  c.atelier_only = !c.atelier_only;
+  openModal("chantiers");
+  mutateAndSync();
+}
+function addChantier() {
+  const client = document.getElementById("new-ch-client").value.trim();
+  const nom = document.getElementById("new-ch-nom").value.trim();
+  const atelier_only = document.getElementById("new-ch-atelier").checked;
+  if (!nom || !client) { alert("Entrez client et nom"); return; }
+  while (CHANTIERS.find(c => c.id === _nextChId) || _nextChId < 500) _nextChId++;
+  CHANTIERS.push({ id: _nextChId++, client, nom, actif: true, atelier_only });
+  openModal("chantiers");
+  mutateAndSync();
+}
+function removeChantier(id) {
+  const c = CHANTIERS.find(x => x.id === id);
+  if (!c) return;
+  if (!confirm("Supprimer definitivement \"" + c.nom + "\" et toutes ses affectations ?")) return;
+  CHANTIERS.splice(CHANTIERS.indexOf(c), 1);
+  AFFECTATIONS = AFFECTATIONS.filter(a => a.c !== id);
+  AFFECTATIONS_ATELIER = AFFECTATIONS_ATELIER.filter(a => a.c !== id);
+  AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => a.c !== id);
+  LIVRAISONS = LIVRAISONS.filter(l => l.c !== id);
+  BESOINS = BESOINS.filter(b => b.c !== id);
+  openModal("chantiers");
+  mutateAndSync();
+}
+
 // --- CRUD Equipements ---
 let _nextEquipId = 1;
 function addEquipement() {
@@ -1011,6 +1119,10 @@ function attachDragHandlers() {
         const r = parseInt(el.dataset.r), d = el.dataset.d;
         if (d === "pool" || d === "chip") return;
         INDISPOS = INDISPOS.filter(i => !(i.r === r && i.d === d));
+      } else if (kind === "atelier-aff") {
+        const r = parseInt(el.dataset.r), c = parseInt(el.dataset.c), d = el.dataset.d;
+        if (d === "pool" || d === "chip") return;
+        AFFECTATIONS_ATELIER = AFFECTATIONS_ATELIER.filter(a => !(a.r === r && a.c === c && a.d === d));
       }
       mutateAndSync();
     });
@@ -1066,6 +1178,7 @@ function attachDragHandlers() {
       if (dragged.kind === "equip") AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => !(a.e === dragged.id && a.c === dragged.c && a.d === dragged.d));
       else if (dragged.kind === "ouvrier") AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === dragged.r && a.c === dragged.c && a.d === dragged.d));
       else if (dragged.kind === "indispo") INDISPOS = INDISPOS.filter(i => !(i.r === dragged.r && i.d === dragged.d));
+      else if (dragged.kind === "atelier-aff") AFFECTATIONS_ATELIER = AFFECTATIONS_ATELIER.filter(a => !(a.r === dragged.r && a.c === dragged.c && a.d === dragged.d));
       mutateAndSync();
     });
   }
@@ -1156,12 +1269,33 @@ function handleDrop(zone) {
     mutateAndSync(); return;
   }
   if (dragged.kind === "chantier-chip") {
-    if (VIEW !== "ouvrier") { rerender(); return; }
     const newR = parseInt(zone.dataset.r);
     const newC = dragged.c;
-    const conflict = AFFECTATIONS.find(a => a.r === newR && a.d === newD);
-    if (conflict) { rerender(); return; }
-    AFFECTATIONS.push({r:newR,c:newC,d:newD});
+    if (VIEW === "ouvrier") {
+      if (indispoAt(newR, newD)) { rerender(); return; }
+      const conflict = AFFECTATIONS.find(a => a.r === newR && a.d === newD);
+      if (conflict) { rerender(); return; }
+      AFFECTATIONS.push({r:newR,c:newC,d:newD});
+      mutateAndSync(); return;
+    }
+    if (VIEW === "atelier") {
+      if (indispoAt(newR, newD)) { rerender(); return; }
+      // Evite le doublon exact (meme r, meme c, meme d)
+      if (AFFECTATIONS_ATELIER.find(a => a.r === newR && a.c === newC && a.d === newD)) { rerender(); return; }
+      AFFECTATIONS_ATELIER.push({r:newR, c:newC, d:newD});
+      mutateAndSync(); return;
+    }
+    rerender(); return;
+  }
+  if (dragged.kind === "atelier-aff") {
+    const newR = parseInt(zone.dataset.r);
+    const newC = dragged.c;
+    // Retire l'ancien
+    AFFECTATIONS_ATELIER = AFFECTATIONS_ATELIER.filter(a => !(a.r === dragged.r && a.c === dragged.c && a.d === dragged.d));
+    if (indispoAt(newR, newD)) { mutateAndSync(); return; }
+    if (!AFFECTATIONS_ATELIER.find(a => a.r === newR && a.c === newC && a.d === newD)) {
+      AFFECTATIONS_ATELIER.push({r:newR, c:newC, d:newD});
+    }
     mutateAndSync(); return;
   }
 }
@@ -1242,15 +1376,26 @@ function clearWeek(isoFrom, isoTo) {
   mutateAndSync();
 }
 
+function _setWeeksForView(v) {
+  const newWeeks = v === "atelier" ? 2 : 4;
+  if (newWeeks !== WEEKS) {
+    WEEKS = newWeeks;
+    DATES = buildDates();
+  }
+}
 function setView(v) {
+  _setWeeksForView(v);
   VIEW = v;
   document.getElementById("btn-view-ouvrier").classList.toggle("active", v === "ouvrier");
   document.getElementById("btn-view-chantier").classList.toggle("active", v === "chantier");
   document.getElementById("btn-view-ressources").classList.toggle("active", v === "ressources");
+  const btnAtelier = document.getElementById("btn-view-atelier");
+  if (btnAtelier) btnAtelier.classList.toggle("active", v === "atelier");
   rerender();
 }
 function rerender() {
   if (VIEW === "ouvrier") renderViewOuvrier();
+  else if (VIEW === "atelier") renderViewAtelier();
   else if (VIEW === "chantier") renderViewChantier();
   else renderViewRessources();
   renderStats();
@@ -1300,6 +1445,7 @@ function printPlanning(mode) {
 // === EVENT LISTENERS ===
 document.getElementById("btn-view-ouvrier").addEventListener("click", () => setView("ouvrier"));
 document.getElementById("btn-view-chantier").addEventListener("click", () => setView("chantier"));
+document.getElementById("btn-view-atelier").addEventListener("click", () => setView("atelier"));
 document.getElementById("btn-view-ressources").addEventListener("click", () => setView("ressources"));
 document.getElementById("btn-prev").addEventListener("click", () => goToWeek(-1));
 document.getElementById("btn-next").addEventListener("click", () => goToWeek(1));
