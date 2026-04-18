@@ -125,6 +125,29 @@
   .ouvrier-name-bubble.cat-atelier  { background: #e0e7ff; color: #3730a3; border-color: #818cf8; }
   .ouvrier-name-bubble.cat-externe  { background: #fee2e2; color: #991b1b; border-color: #f87171; }
 
+  /* === Adaptation cellules selon zoom 1 ou 4 semaines === */
+  body.screen-1w .cell { min-width: 140px !important; }
+  body.screen-1w .bulle { font-size: 13px !important; }
+  body.screen-4w .cell {
+    min-width: 0 !important;
+    width: auto !important;
+    padding: 1px !important;
+  }
+  body.screen-4w .bulle {
+    font-size: 9px !important;
+    padding: 1px 3px !important;
+    line-height: 1.1;
+    display: inline-block !important;
+    white-space: normal !important;
+    text-align: center;
+    max-width: 100%;
+  }
+  body.screen-4w td, body.screen-4w th { padding-left: 2px !important; padding-right: 2px !important; }
+  body.screen-4w td:first-child, body.screen-4w th:first-child { min-width: 140px !important; width: 140px !important; max-width: 140px !important; }
+  body.screen-4w .dup-btn { font-size: 7px !important; padding: 1px 3px !important; }
+  body.screen-4w .ouvrier-name-bubble { font-size: 11px !important; padding: 2px 7px !important; }
+  body.screen-4w table { table-layout: fixed !important; width: 100% !important; }
+
   @media print {
     @page { size: A3 landscape; margin: 5mm; }
     html, body { background: white !important; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
@@ -1582,6 +1605,9 @@ function _updateHeaderButtons() {
     btn1w.className = (WEEKS === 1) ? classesActive : classesInactive;
     btn4w.className = (WEEKS === 4) ? classesActive : classesInactive;
   }
+  // Applique un style cellule compact / large selon le nombre de semaines
+  document.body.classList.toggle("screen-1w", WEEKS === 1);
+  document.body.classList.toggle("screen-4w", WEEKS >= 4);
 }
 function rerender() {
   _updateHeaderButtons();
@@ -1612,20 +1638,19 @@ function goToday() {
   rerender();
 }
 
-// Impression : "week" = 1 semaine courante, "full" = 4 semaines visibles
+// Impression : "week" = 1 semaine courante, "full" = toutes les semaines visibles
 function printPlanning(mode) {
   const savedDates = DATES.slice();
   if (mode === "week") {
-    DATES = savedDates.slice(0, 6); // lundi a samedi de la 1re semaine visible
+    const daysPerWk = SHOW_SATURDAY ? 6 : 5;
+    DATES = savedDates.slice(0, daysPerWk);
     document.body.classList.add("print-week");
   } else {
     document.body.classList.add("print-full");
   }
   rerender();
-  // Laisser le temps au DOM de rendre avant l'impression
   setTimeout(() => {
     window.print();
-    // Restaurer l'etat apres fermeture du dialog d'impression
     DATES = savedDates;
     document.body.classList.remove("print-week");
     document.body.classList.remove("print-full");
