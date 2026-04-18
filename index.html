@@ -590,7 +590,8 @@ function renderViewChantier() {
       const isMonday = i > 0 && d.getDay() === 1;
       const satCls = isSat ? "cell-sat" : "";
       const sepCls = isMonday ? "week-separator" : "";
-      const inCell = AFFECTATIONS.filter(a => a.c === ch.id && a.d === iso);
+      // Exclut les affectations d'ouvriers indisponibles ce jour-la (coherence donnees)
+      const inCell = AFFECTATIONS.filter(a => a.c === ch.id && a.d === iso && !indispoAt(a.r, iso));
       const bulles = inCell.map(a => {
         const r = ressourceById(a.r);
         if (!r) return "";
@@ -604,6 +605,28 @@ function renderViewChantier() {
       : `<div class="font-bold text-slate-800 text-sm">${ch.id}</div><div class="text-xs font-semibold text-slate-700 leading-tight">${ch.nom}</div><div class="text-[10px] text-slate-500">${ch.client}</div>`;
     html += `<tr><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px] leading-tight">${label}</td>${cells}</tr>`;
   });
+  // Ligne INDISPONIBILITES en bas de la vue Par chantier
+  const hasAnyIndispo = INDISPOS.some(i => DATES.some(d => toISO(d) === i.d));
+  if (hasAnyIndispo) {
+    html += `<tr><td class="sticky left-0 bg-slate-100 border-r border-b border-slate-200 px-3 py-1 text-[10px] font-bold text-slate-500 uppercase tracking-wider" colspan="${DATES.length+1}">INDISPONIBILITÉS</td></tr>`;
+    const indispoCells = DATES.map((d, i) => {
+      const iso = toISO(d);
+      const isToday = iso === TODAY;
+      const isSat = isWeekend(d);
+      const isMonday = i > 0 && d.getDay() === 1;
+      const satCls = isSat ? "cell-sat" : "";
+      const sepCls = isMonday ? "week-separator" : "";
+      const indsDay = INDISPOS.filter(ind => ind.d === iso);
+      const bulles = indsDay.map(ind => {
+        const r = ressourceById(ind.r);
+        if (!r) return "";
+        const info = INDISPO_TYPES[ind.type] || { label: ind.type, icon: "" };
+        return `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${r.nom} - ${info.label}">${info.icon} ${r.nom}</span>`;
+      }).join("");
+      return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls}" data-d="${iso}">${bulles}</td>`;
+    }).join("");
+    html += `<tr><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-xs text-slate-500 italic">(ouvriers off)</div></td>${indispoCells}</tr>`;
+  }
   document.getElementById("planning-body").innerHTML = html;
 }
 
@@ -915,6 +938,7 @@ function attachDragHandlers() {
       }
       if (VIEW === "chantier" && (dragged.kind === "ouvrier" || !dragged.kind)) {
         const targetD = zone.dataset.d;
+        if (indispoAt(dragged.r, targetD)) { zone.classList.add("drop-forbidden"); return; }
         const conflict = AFFECTATIONS.find(a => a.r === dragged.r && a.d === targetD && !(a.c === dragged.c && a.d === dragged.d));
         if (conflict) { zone.classList.add("drop-forbidden"); return; }
       }
