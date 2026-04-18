@@ -365,6 +365,7 @@ function loadFromFirebase(snap) {
   if (data.indispos) INDISPOS = data.indispos; else INDISPOS = [];
   if (data.affectations_atelier) AFFECTATIONS_ATELIER = data.affectations_atelier; else AFFECTATIONS_ATELIER = [];
   migrateChantiersSchema();
+  migrateRessourcesSchema();
   rerender(); // affichage seul, PAS de sync retour
 }
 
@@ -575,6 +576,15 @@ function migrateChantiersSchema() {
     }
   });
 }
+// Migration RESSOURCES : derive show_chantier / show_atelier depuis cat
+function migrateRessourcesSchema() {
+  RESSOURCES.forEach(r => {
+    if (r.show_chantier === undefined && r.show_atelier === undefined) {
+      if (r.cat === "atelier") { r.show_chantier = false; r.show_atelier = true; }
+      else { r.show_chantier = true; r.show_atelier = false; } // chantier et externe par defaut
+    }
+  });
+}
 function _showsOnChantier(c) { return !!(c && c.show_chantier); }
 function _showsOnAtelier(c)  { return !!(c && c.show_atelier); }
 function _isAtelierOnly(chId) { const c = chantierById(chId); return !!(c && c.show_atelier && !c.show_chantier); }
@@ -688,9 +698,9 @@ function renderViewOuvrier() {
       ${indispoChipsHtml}
     </div>`;
   const groups = {
-    "OUVRIERS CHANTIER": RESSOURCES.filter(r => r.cat === "chantier" && r.visible !== false),
-    "OUVRIERS ATELIER":  RESSOURCES.filter(r => r.cat === "atelier" && r.visible !== false),
-    "EXTERNES":          RESSOURCES.filter(r => r.cat === "externe" && r.visible !== false),
+    "OUVRIERS CHANTIER": RESSOURCES.filter(r => r.cat === "chantier" && r.visible !== false && (r.show_chantier || r.show_atelier)),
+    "OUVRIERS ATELIER":  RESSOURCES.filter(r => r.cat === "atelier" && r.visible !== false && (r.show_chantier || r.show_atelier)),
+    "EXTERNES":          RESSOURCES.filter(r => r.cat === "externe" && r.visible !== false && (r.show_chantier || r.show_atelier)),
   };
   let html = "";
   for (const [label, list] of Object.entries(groups)) {
@@ -720,7 +730,7 @@ function renderViewOuvrier() {
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
       }).join("");
       const catLabel = r.cat === "chantier" ? "Chantier" : r.cat === "atelier" ? "Atelier" : "Externe";
-      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${ouvrierLabel(r)}</div><div class="text-[10px] text-slate-400">${catLabel}${r.chef ? " · Chef" : ""}</div></td>${cells}</tr>`;
+      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${ouvrierLabel(r)}</div><div class="text-[10px] text-slate-400">${catLabel}</div></td>${cells}</tr>`;
     });
   }
   document.getElementById("planning-body").innerHTML = html;
@@ -743,7 +753,7 @@ function renderViewAtelier() {
       <span class="text-xs font-semibold text-slate-500 mr-2">Astuce :</span>
       <span class="text-xs text-slate-600">empile autant de chantiers que nécessaire sur une même journée. Double-clic sur une bulle pour la retirer.</span>
     </div>`;
-  const atelierList = RESSOURCES.filter(r => r.cat === "atelier" && r.visible !== false);
+  const atelierList = RESSOURCES.filter(r => r.show_atelier && r.visible !== false);
   let html = "";
   atelierList.forEach(r => {
     const cells = DATES.map((d, i) => {
@@ -770,7 +780,7 @@ function renderViewAtelier() {
       }
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
     }).join("");
-    html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${ouvrierLabel(r)}</div><div class="text-[10px] text-slate-400">Atelier${r.chef ? " · Chef" : ""}</div></td>${cells}</tr>`;
+    html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><div class="text-sm font-bold text-slate-800">${ouvrierLabel(r)}</div><div class="text-[10px] text-slate-400">Atelier</div></td>${cells}</tr>`;
   });
   if (atelierList.length === 0) {
     html = `<tr><td colspan="${DATES.length+1}" class="p-4 text-center text-slate-500 text-sm">Aucun ouvrier atelier. Ajoute-les via Gérer &gt; Ouvriers (catégorie Atelier).</td></tr>`;
@@ -780,7 +790,7 @@ function renderViewAtelier() {
 
 function renderViewChantier() {
   renderHeaders("Chantier");
-  const ouvriersHtml = RESSOURCES.filter(r => r.visible !== false).map(r => {
+  const ouvriersHtml = RESSOURCES.filter(r => r.visible !== false && r.show_chantier).map(r => {
     return `<span class="bulle cat-${r.cat}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="-1" data-d="pool" style="cursor:grab" title="${r.chef ? 'Chef equipe' : ''}">${ouvrierLabel(r)}</span>`;
   }).join("");
   const indispoChipsHtml2 = Object.entries(INDISPO_TYPES).map(([type, info]) => {
@@ -1026,26 +1036,42 @@ function openModal(mode) {
       </div>`;
   } else if (MODAL_MODE === "ouvriers") {
     title.textContent = "Gérer les ouvriers";
-    hint.textContent = "Ajoutez ou supprimez des ouvriers. Les affectations liées sont supprimées avec l'ouvrier.";
+    hint.innerHTML = "⭐ = chef d'équipe. 🏗 = visible dans Par ouvrier + Par chantier. 🔧 = visible dans Atelier. Les deux = partout. Aucun = archivé.";
     const cats = { chantier: "Chantier", atelier: "Atelier", externe: "Externe" };
-    const rows = RESSOURCES.map(r => `
-      <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded group" data-res-id="${r.id}">
-        <button onclick="toggleChef(${r.id})" class="text-lg leading-none ${r.chef ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500'}" title="${r.chef ? 'Retirer chef equipe' : 'Marquer chef equipe'}">${r.chef ? "⭐" : "☆"}</button>
+    const rows = RESSOURCES.map(r => {
+      const archived = !r.show_chantier && !r.show_atelier;
+      return `
+      <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded group ${archived ? 'opacity-50' : ''}" data-res-id="${r.id}">
+        <button onclick="toggleChef(${r.id})" class="text-lg leading-none ${r.chef ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500'}" title="Chef">${r.chef ? "⭐" : "☆"}</button>
+        <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Par ouvrier / Par chantier">
+          <input type="checkbox" onchange="setOuvrierScope(${r.id}, 'chantier', this.checked)" ${r.show_chantier ? "checked" : ""} class="rounded">
+          <span class="text-base leading-none">🏗</span>
+        </label>
+        <label class="flex items-center gap-1 text-xs cursor-pointer mr-1" title="Visible dans Atelier">
+          <input type="checkbox" onchange="setOuvrierScope(${r.id}, 'atelier', this.checked)" ${r.show_atelier ? "checked" : ""} class="rounded">
+          <span class="text-base leading-none">🔧</span>
+        </label>
         <span class="text-sm font-semibold text-slate-800 flex-1">${r.nom}</span>
         <span class="text-xs text-slate-500 w-20">${cats[r.cat] || r.cat}</span>
         <button onclick="removeOuvrier(${r.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer">&minus;</button>
-      </div>
-    `).join("");
+      </div>`;
+    }).join("");
     list.innerHTML = rows + `
       <div class="border-t border-slate-200 mt-3 pt-3">
         <p class="text-xs font-semibold text-slate-600 mb-2">Ajouter un ouvrier</p>
-        <div class="flex items-center gap-2">
+        <div class="flex items-center gap-2 flex-wrap">
           <input id="new-ouv-nom" type="text" placeholder="Nom (ex: Marc)" class="flex-1 text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
           <select id="new-ouv-cat" class="text-sm border border-slate-300 rounded px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-blue-500">
             <option value="chantier">Chantier</option>
             <option value="atelier">Atelier</option>
             <option value="externe">Externe</option>
           </select>
+          <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Par ouvrier / Par chantier">
+            <input id="new-ouv-chantier" type="checkbox" checked class="rounded"> 🏗
+          </label>
+          <label class="flex items-center gap-1 text-xs cursor-pointer" title="Visible dans Atelier">
+            <input id="new-ouv-atelier" type="checkbox" class="rounded"> 🔧
+          </label>
           <button onclick="addOuvrier()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1.5 text-sm font-semibold">+</button>
         </div>
       </div>`;
@@ -1101,10 +1127,21 @@ let _nextOuvId = 100;
 function addOuvrier() {
   const nom = document.getElementById("new-ouv-nom").value.trim();
   const cat = document.getElementById("new-ouv-cat").value;
+  const show_chantier = document.getElementById("new-ouv-chantier").checked;
+  const show_atelier = document.getElementById("new-ouv-atelier").checked;
   if (!nom) { alert("Entrez un nom"); return; }
-  RESSOURCES.push({ id: _nextOuvId++, nom, cat, visible: true });
+  if (!show_chantier && !show_atelier) { alert("Cochez au moins 🏗 Chantier ou 🔧 Atelier."); return; }
+  RESSOURCES.push({ id: _nextOuvId++, nom, cat, visible: true, show_chantier, show_atelier });
   openModal("ouvriers");
   mutateAndSync();
+}
+function setOuvrierScope(id, scope, checked) {
+  const r = RESSOURCES.find(x => x.id === id);
+  if (!r) return;
+  if (scope === "chantier") r.show_chantier = checked;
+  else if (scope === "atelier") r.show_atelier = checked;
+  mutateAndSync();
+  openModal("ouvriers");
 }
 function removeOuvrier(id) {
   const r = RESSOURCES.find(x => x.id === id);
