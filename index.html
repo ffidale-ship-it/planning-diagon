@@ -26,7 +26,6 @@
   /* Zebrage vertical tres leger pour distinguer les colonnes jour */
   td.cell:nth-child(even) { background-color: rgba(148, 163, 184, 0.06); }
   td.cell.cell-sat { background-color: #f8fafc; }
-  td.cell.cell-today { background-color: #fef3c7 !important; }
   .cell-today { background-color: #fef3c7 !important; }
   .bulle {
     display: inline-flex; align-items: center; gap: 3px;
@@ -399,9 +398,8 @@
       <p id="modal-hint" class="text-xs text-slate-500 mb-3"></p>
       <div id="modal-list" class="space-y-1"></div>
     </div>
-    <div class="px-5 py-3 border-t border-slate-200 flex justify-end gap-2">
-      <button onclick="closeModal()" class="px-3 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 rounded">Fermer</button>
-      <button id="modal-apply-btn" onclick="applyModalSelection()" class="px-3 py-1.5 text-sm bg-blue-600 text-white hover:bg-blue-700 rounded">Appliquer</button>
+    <div class="px-5 py-3 border-t border-slate-200 flex justify-end">
+      <button onclick="closeModal()" class="px-4 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 rounded">Fermer</button>
     </div>
   </div>
 </div>
@@ -545,7 +543,7 @@ let RESSOURCES = [
   { id: 90, nom: "Intérim 1",    cat: "externe"  },
   { id: 91, nom: "S-traitant A", cat: "externe"  },
 ];
-function ouvrierLabel(r) { return (r && r.chef ? "⭐ " : "") + (r ? r.nom : "?"); }
+function ouvrierLabel(r) { return (r && r.chef ? "⭐ " : "") + esc(r ? r.nom : "?"); }
 
 // Affectations atelier : {r, c, d} - plusieurs entrees possibles pour meme (r, d)
 let AFFECTATIONS_ATELIER = [];
@@ -686,9 +684,8 @@ function _showsOnChantier(c) { return !!(c && c.show_chantier); }
 function _showsOnAtelier(c)  { return !!(c && c.show_atelier); }
 function _isAtelierOnly(chId) { const c = chantierById(chId); return !!(c && c.show_atelier && !c.show_chantier); }
 // Chantiers visibles dans les vues standard (par-ouvrier, par-chantier) :
-// - actif
-// - pas marque atelier_only
-// - (optionnel) a au moins une affectation dans les 4 semaines
+// - show_chantier = true (ce chantier doit apparaitre cote chantier)
+// - (optionnel) a au moins une affectation dans les 4 semaines (toggle HIDE_EMPTY_CHANTIERS)
 function _visibleChantiers() {
   return CHANTIERS.filter(c => c.show_chantier && (!HIDE_EMPTY_CHANTIERS || _chantierHasAffInView(c.id)));
 }
@@ -733,6 +730,11 @@ function colorChantier(id) {
   return PALETTE[id % PALETTE.length];
 }
 function toISO(d) { return d.getFullYear() + "-" + String(d.getMonth()+1).padStart(2,"0") + "-" + String(d.getDate()).padStart(2,"0"); }
+// Escape HTML pour neutraliser les noms saisis par l'utilisateur (XSS)
+function esc(s) {
+  if (s === undefined || s === null) return "";
+  return String(s).replace(/[&<>"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+}
 function addDays(d, n) { const x = new Date(d); x.setDate(x.getDate()+n); return x; }
 function getWeekNumber(d) {
   const date = new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate()));
@@ -786,7 +788,7 @@ function renderViewOuvrier() {
   const nbActifsTotal = CHANTIERS.filter(c => c.show_chantier).length;
   const nbHidden = nbActifsTotal - visibles.length;
   const chipsHtml = actifs.map(c => {
-    const label = c.id === 0 ? "ATELIER" : c.id + " - " + c.nom;
+    const label = c.id === 0 ? "ATELIER" : c.id + " - " + esc(c.nom);
     return `<span class="bulle ${colorChantier(c.id)}" draggable="true" data-kind="chantier-chip" data-c="${c.id}" data-d="chip" style="cursor:grab">${label}</span>`;
   }).join("");
   const indispoChipsHtml = Object.entries(INDISPO_TYPES).map(([type, info]) => {
@@ -846,10 +848,10 @@ function renderViewOuvrier() {
 
 function renderViewAtelier() {
   renderHeaders("Ressource atelier");
-  // Chantiers utilisables en atelier : tous les actifs (y compris atelier_only)
+  // Chantiers affichables cote atelier (show_atelier = true)
   const chantiersAtelier = CHANTIERS.filter(c => c.show_atelier);
   const chipsHtml = chantiersAtelier.map(c => {
-    const label = c.id + " - " + c.nom + (c.show_chantier ? "" : " 🔧");
+    const label = c.id + " - " + esc(c.nom) + (c.show_chantier ? "" : " 🔧");
     return `<span class="bulle ${colorChantier(c.id)}" draggable="true" data-kind="chantier-chip" data-c="${c.id}" data-d="chip" style="cursor:grab">${label}</span>`;
   }).join("");
   document.getElementById("context-bar").innerHTML = `
@@ -943,14 +945,14 @@ function renderViewChantier() {
       const bulles = inCell.map(a => {
         const r = ressourceById(a.r);
         if (!r) return "";
-        return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${r.nom}">${ouvrierLabel(r)}</span>`;
+        return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${esc(r.nom)}">${ouvrierLabel(r)}</span>`;
       }).join("");
       const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button></div>` : "";
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${bulles}${dupBtns}</td>`;
     }).join("");
     const label = ch.id === 0
       ? `<div class="font-bold text-slate-700 text-sm">ATELIER</div><div class="text-[10px] text-slate-400">Interne</div>`
-      : `<div class="font-bold text-slate-800 text-sm">${ch.id}</div><div class="text-xs font-semibold text-slate-700 leading-tight">${ch.nom}</div><div class="text-[10px] text-slate-500">${ch.client}</div>`;
+      : `<div class="font-bold text-slate-800 text-sm">${ch.id}</div><div class="text-xs font-semibold text-slate-700 leading-tight">${esc(ch.nom)}</div><div class="text-[10px] text-slate-500">${esc(ch.client)}</div>`;
     html += `<tr><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px] leading-tight">${label}</td>${cells}</tr>`;
   });
   // Ligne INDISPONIBILITES en bas de la vue Par chantier
@@ -969,7 +971,7 @@ function renderViewChantier() {
         const r = ressourceById(ind.r);
         if (!r) return "";
         const info = INDISPO_TYPES[ind.type] || { label: ind.type, icon: "" };
-        return `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${r.nom} - ${info.label}">${info.icon} ${ouvrierLabel(r)}</span>`;
+        return `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${esc(r.nom)} - ${info.label}">${info.icon} ${ouvrierLabel(r)}</span>`;
       }).join("");
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-d="${iso}">${bulles}</td>`;
     }).join("");
@@ -984,7 +986,7 @@ function renderViewRessources() {
   const equipLibres = EQUIPEMENTS.filter(e => e.visible !== false && !equipPrisToday.has(e.id));
   const poolEquipHtml = equipLibres.length === 0
     ? '<span class="text-xs text-slate-400 italic px-2">Aucun equipement libre</span>'
-    : equipLibres.map(e => `<span class="bulle cat-${e.type}" draggable="true" data-kind="equip" data-id="${e.id}" data-c="-1" data-d="pool" title="${e.nom}">${iconEquip(e.type)} ${e.nom}</span>`).join("");
+    : equipLibres.map(e => `<span class="bulle cat-${e.type}" draggable="true" data-kind="equip" data-id="${e.id}" data-c="-1" data-d="pool" title="${esc(e.nom)}">${iconEquip(e.type)} ${esc(e.nom)}</span>`).join("");
   document.getElementById("context-bar").innerHTML = `
     <div class="flex items-center gap-3 flex-wrap">
       <span class="text-xs font-semibold text-slate-500 shrink-0">EQUIPEMENTS DISPO :</span>
@@ -1016,20 +1018,20 @@ function renderViewRessources() {
       const equipHtml = equipCell.map(a => {
         const e = equipementById(a.e);
         if (!e || e.visible === false) return "";
-        return `<span class="bulle cat-${e.type}" draggable="true" data-kind="equip" data-id="${e.id}" data-c="${ch.id}" data-d="${iso}" title="${e.nom}">${iconEquip(e.type)} ${e.nom.split(" ").slice(0,2).join(" ")}</span>`;
+        return `<span class="bulle cat-${e.type}" draggable="true" data-kind="equip" data-id="${e.id}" data-c="${ch.id}" data-d="${iso}" title="${esc(e.nom)}">${iconEquip(e.type)} ${esc(e.nom.split(" ").slice(0,2).join(" "))}</span>`;
       }).join("");
       const livCell = LIVRAISONS.filter(l => l.c === ch.id && l.d === iso);
-      const livHtml = livCell.map(l => `<span class="bulle cat-livraison" draggable="true" data-kind="liv" data-id="${l.id}" data-c="${ch.id}" data-d="${iso}" title="${l.nom} - ${l.qte}">${l.nom} (${l.qte})</span>`).join("");
+      const livHtml = livCell.map(l => `<span class="bulle cat-livraison" draggable="true" data-kind="liv" data-id="${l.id}" data-c="${ch.id}" data-d="${iso}" title="${esc(l.nom)} - ${esc(l.qte)}">${esc(l.nom)} (${esc(l.qte)})</span>`).join("");
       let besHtml = "";
       if (isMon) {
         const besSem = besoinsCh.filter(b => b.semaine === sem);
-        besHtml = besSem.map(b => `<span class="bulle cat-besoin" title="${b.nom} - ${b.qte}">${b.nom} (${b.qte})</span>`).join("");
+        besHtml = besSem.map(b => `<span class="bulle cat-besoin" title="${esc(b.nom)} - ${esc(b.qte)}">${esc(b.nom)} (${esc(b.qte)})</span>`).join("");
       }
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${equipHtml}${livHtml}${besHtml}</td>`;
     }).join("");
     const label = ch.id === 0
       ? `<div class="font-bold text-slate-700 text-sm">ATELIER</div><div class="text-[10px] text-slate-400">Interne</div>`
-      : `<div class="font-bold text-slate-800 text-sm">${ch.id}</div><div class="text-xs font-semibold text-slate-700 leading-tight">${ch.nom}</div><div class="text-[10px] text-slate-500">${ch.client}</div>`;
+      : `<div class="font-bold text-slate-800 text-sm">${ch.id}</div><div class="text-xs font-semibold text-slate-700 leading-tight">${esc(ch.nom)}</div><div class="text-[10px] text-slate-500">${esc(ch.client)}</div>`;
     html += `<tr><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px] leading-tight">${label}</td>${cells}</tr>`;
   });
   document.getElementById("planning-body").innerHTML = html;
@@ -1079,13 +1081,13 @@ function renderStats() {
       tooltipContent = '<span class="all-ok">Tous planifiés !</span>';
     } else {
       tooltipContent = "";
-      if (missing.length > 0) tooltipContent += '<div style="margin-bottom:3px;color:#94a3b8;font-size:10px">Non affectés :</div>' + missing.map(r => '<span class="missing-name">' + r.nom + '</span>').join('<br>');
+      if (missing.length > 0) tooltipContent += '<div style="margin-bottom:3px;color:#94a3b8;font-size:10px">Non affectés :</div>' + missing.map(r => '<span class="missing-name">' + esc(r.nom) + '</span>').join('<br>');
       if (indispoList.length > 0) {
         if (missing.length > 0) tooltipContent += '<br><br>';
         tooltipContent += '<div style="margin-bottom:3px;color:#94a3b8;font-size:10px">Indisponibles :</div>' + indispoList.map(r => {
           const ind = indispoAt(r.id, iso);
           const info = INDISPO_TYPES[ind.type] || { label: ind.type, icon: "" };
-          return '<span class="missing-name">' + r.nom + ' (' + info.icon + ' ' + info.label + ')</span>';
+          return '<span class="missing-name">' + esc(r.nom) + ' (' + info.icon + ' ' + info.label + ')</span>';
         }).join('<br>');
       }
     }
@@ -1116,8 +1118,8 @@ function openModal(mode) {
         <span onclick="setChantierScope(${c.id}, 'chantier', ${!c.show_chantier})" class="scope-toggle ${c.show_chantier ? 'active' : ''}" title="Par ouvrier / Par chantier (clic pour basculer)">🏗</span>
         <span onclick="setChantierScope(${c.id}, 'atelier', ${!c.show_atelier})" class="scope-toggle ${c.show_atelier ? 'active' : ''} mr-1" title="Atelier (clic pour basculer)">🔧</span>
         <span class="text-xs font-mono text-slate-400 w-10">${c.id}</span>
-        <span class="text-xs text-slate-500 w-28 truncate">${c.client}</span>
-        <span class="text-sm text-slate-800 flex-1">${c.nom}</span>
+        <span class="text-xs text-slate-500 w-28 truncate">${esc(c.client)}</span>
+        <span class="text-sm text-slate-800 flex-1">${esc(c.nom)}</span>
         <button onclick="removeChantier(${c.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer définitivement">&minus;</button>
       </div>`;
     }).join("");
@@ -1143,7 +1145,7 @@ function openModal(mode) {
         <button onclick="toggleChef(${r.id})" class="text-lg leading-none ${r.chef ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500'}" title="Chef d'équipe">${r.chef ? "⭐" : "☆"}</button>
         <span onclick="setOuvrierScope(${r.id}, 'chantier', ${!r.show_chantier})" class="scope-toggle ${r.show_chantier ? 'active' : ''}" title="Par ouvrier / Par chantier (clic pour basculer)">🏗</span>
         <span onclick="setOuvrierScope(${r.id}, 'atelier', ${!r.show_atelier})" class="scope-toggle ${r.show_atelier ? 'active' : ''} mr-1" title="Atelier (clic pour basculer)">🔧</span>
-        <span class="text-sm font-semibold text-slate-800 flex-1">${r.nom}</span>
+        <span class="text-sm font-semibold text-slate-800 flex-1">${esc(r.nom)}</span>
         <span class="text-xs text-slate-500 w-20">${cats[r.cat] || r.cat}</span>
         <button onclick="removeOuvrier(${r.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer">&minus;</button>
       </div>`;
@@ -1169,7 +1171,7 @@ function openModal(mode) {
     const types = { nacelle: "Nacelle", camion: "Camion", remorque: "Remorque", outillage: "Outillage" };
     const rows = EQUIPEMENTS.map(e => `
       <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded group" data-equip-id="${e.id}">
-        <span class="text-sm font-semibold text-slate-800 flex-1">${e.nom}</span>
+        <span class="text-sm font-semibold text-slate-800 flex-1">${esc(e.nom)}</span>
         <span class="text-xs text-slate-500 w-20">${types[e.type] || e.type}</span>
         <button onclick="removeEquipement('${e.id}')" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer">&minus;</button>
       </div>
@@ -1190,10 +1192,6 @@ function openModal(mode) {
       </div>`;
   }
 
-  // Bouton Appliquer visible uniquement pour chantiers (checkboxes)
-  const applyBtn = document.getElementById("modal-apply-btn");
-  if (applyBtn) applyBtn.style.display = MODAL_MODE === "chantiers" ? "" : "none";
-
   const m = document.getElementById("manage-modal");
   m.classList.remove("hidden");
   m.classList.add("flex");
@@ -1205,12 +1203,9 @@ function closeModal() {
   m.classList.remove("flex");
 }
 
-function applyModalSelection() {
-  // Toutes les modifications sont desormais en live (setChantierScope, toggleChef, etc.)
-  closeModal();
-}
-
 // --- CRUD Ouvriers ---
+// Auto-increment d'IDs : ouvriers a partir de 100, chantiers a partir de 500,
+// equipements en format "type-nn" (ex: nac-01) via _nextEquipId.
 let _nextOuvId = 100;
 function addOuvrier() {
   const nom = document.getElementById("new-ouv-nom").value.trim();
