@@ -1047,16 +1047,23 @@ function renderViewRessources() {
 }
 
 function renderStats() {
-  // Couverture chantier : les ouvriers rattaches a la categorie chantier
-  // (peu importe s'ils ont en plus le scope atelier coche en renfort)
-  // Le cat est le rattachement nominal. show_chantier sert juste a verifier
-  // qu'ils ne sont pas archives.
-  const ouvriersChantier = RESSOURCES.filter(r => r.cat === "chantier" && r.show_chantier && r.visible !== false);
+  // Couverture contextuelle selon la vue active :
+  // - vue atelier : on regarde les ouvriers rattaches atelier (cat=atelier + show_atelier)
+  //                 et on compte ceux qui ont AU MOINS une affectation atelier ce jour-la
+  // - autres vues : les ouvriers chantier (cat=chantier + show_chantier), 1 affectation/jour
+  const isAtelierView = VIEW === "atelier";
+  const ouvriersCible = isAtelierView
+    ? RESSOURCES.filter(r => r.cat === "atelier" && r.show_atelier && r.visible !== false)
+    : RESSOURCES.filter(r => r.cat === "chantier" && r.show_chantier && r.visible !== false);
+  // On garde le nom historique "ouvriersChantier" pour le reste de la fonction (par paresse)
+  const ouvriersChantier = ouvriersCible;
   const ouvIds = new Set(ouvriersChantier.map(r => r.id));
   const nbR = ouvriersChantier.length;
+  // Source d'affectation selon la vue : AFFECTATIONS_ATELIER en mode atelier sinon AFFECTATIONS
+  const affSource = isAtelierView ? AFFECTATIONS_ATELIER : AFFECTATIONS;
 
   const thisWeekDates = DATES.filter(d => !isWeekend(d)).slice(0,5).map(toISO);
-  const affThisWeek = AFFECTATIONS.filter(a => thisWeekDates.includes(a.d) && ouvIds.has(a.r));
+  const affThisWeek = affSource.filter(a => thisWeekDates.includes(a.d) && ouvIds.has(a.r));
   const indThisWeek = INDISPOS.filter(i => thisWeekDates.includes(i.d) && ouvIds.has(i.r));
   const activeChantiers = new Set(affThisWeek.map(a => a.c));
   const ressourcesUsed = new Set(affThisWeek.map(a => a.r));
@@ -1066,7 +1073,7 @@ function renderStats() {
   document.getElementById("stat-affectations").textContent = affThisWeek.length;
   document.getElementById("stat-libre").textContent = Math.max(0, totalSlots - affThisWeek.length - indThisWeek.length);
   const allWorkDates = DATES.filter(d => !isWeekend(d)).map(toISO);
-  const allAff = AFFECTATIONS.filter(a => allWorkDates.includes(a.d) && ouvIds.has(a.r));
+  const allAff = affSource.filter(a => allWorkDates.includes(a.d) && ouvIds.has(a.r));
   const allInd = INDISPOS.filter(i => allWorkDates.includes(i.d) && ouvIds.has(i.r));
   const totalAll = nbR * allWorkDates.length;
   const dispoAll = Math.max(1, totalAll - allInd.length); // evite division par 0
@@ -1081,8 +1088,9 @@ function renderStats() {
     const isMonday = i > 0 && d.getDay() === 1;
     const sepCls = isMonday ? "week-separator" : "";
     if (isSat) { cHtml += `<td class="cell-sat border-r border-slate-200 ${sepCls}"></td>`; return; }
-    // Couverture du jour : seulement ouvriers chantier (filtrage par ouvIds)
-    const assignedIds = new Set(AFFECTATIONS.filter(a => a.d === iso && ouvIds.has(a.r)).map(a => a.r));
+    // Couverture du jour : selon vue (affSource contient AFFECTATIONS ou AFFECTATIONS_ATELIER)
+    // En mode atelier on dedoublonne sur r.id (ouvrier sur plusieurs chantiers atelier = compte 1)
+    const assignedIds = new Set(affSource.filter(a => a.d === iso && ouvIds.has(a.r)).map(a => a.r));
     const assigned = assignedIds.size;
     const indispoIdsDay = new Set(INDISPOS.filter(i => i.d === iso && ouvIds.has(i.r)).map(i => i.r));
     const indispoCount = indispoIdsDay.size;
@@ -1161,8 +1169,12 @@ function openModal(mode) {
         <button onclick="toggleChef(${r.id})" class="text-lg leading-none ${r.chef ? 'text-amber-500' : 'text-slate-300 hover:text-slate-500'}" title="Chef d'équipe">${r.chef ? "⭐" : "☆"}</button>
         <span onclick="setOuvrierScope(${r.id}, 'chantier', ${!r.show_chantier})" class="scope-toggle ${r.show_chantier ? 'active' : ''}" title="Par ouvrier / Par chantier (clic pour basculer)">🏗</span>
         <span onclick="setOuvrierScope(${r.id}, 'atelier', ${!r.show_atelier})" class="scope-toggle ${r.show_atelier ? 'active' : ''} mr-1" title="Atelier (clic pour basculer)">🔧</span>
-        <span class="text-sm font-semibold text-slate-800 flex-1">${esc(r.nom)}</span>
-        <span class="text-xs text-slate-500 w-20">${cats[r.cat] || r.cat}</span>
+        <input type="text" value="${esc(r.nom)}" onchange="renameOuvrier(${r.id}, this.value)" class="text-sm font-semibold text-slate-800 flex-1 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-2 py-0.5 focus:outline-none bg-transparent">
+        <select onchange="setOuvrierCat(${r.id}, this.value)" class="text-xs text-slate-600 w-24 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-1 py-0.5 bg-transparent focus:outline-none">
+          <option value="chantier" ${r.cat === 'chantier' ? 'selected' : ''}>Chantier</option>
+          <option value="atelier" ${r.cat === 'atelier' ? 'selected' : ''}>Atelier</option>
+          <option value="externe" ${r.cat === 'externe' ? 'selected' : ''}>Externe</option>
+        </select>
         <button onclick="removeOuvrier(${r.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer">&minus;</button>
       </div>`;
     }).join("");
@@ -1239,6 +1251,23 @@ function setOuvrierScope(id, scope, checked) {
   if (!r) return;
   if (scope === "chantier") r.show_chantier = checked;
   else if (scope === "atelier") r.show_atelier = checked;
+  mutateAndSync();
+  openModal("ouvriers");
+}
+function renameOuvrier(id, newNom) {
+  const r = RESSOURCES.find(x => x.id === id);
+  if (!r) return;
+  const v = String(newNom).trim();
+  if (!v) { openModal("ouvriers"); return; } // refuse nom vide, restore l'ancien
+  r.nom = v;
+  mutateAndSync();
+  // pas de reopenModal pour ne pas casser le focus, le rerender se fait via mutateAndSync
+}
+function setOuvrierCat(id, newCat) {
+  const r = RESSOURCES.find(x => x.id === id);
+  if (!r) return;
+  if (!["chantier", "atelier", "externe"].includes(newCat)) return;
+  r.cat = newCat;
   mutateAndSync();
   openModal("ouvriers");
 }
