@@ -123,6 +123,9 @@
   .ouvrier-name-bubble.cat-chantier { background: #dbeafe; color: #1e40af; border-color: #60a5fa; }
   .ouvrier-name-bubble.cat-atelier  { background: #e0e7ff; color: #3730a3; border-color: #818cf8; }
   .ouvrier-name-bubble.cat-externe  { background: #fee2e2; color: #991b1b; border-color: #f87171; }
+  .ouvrier-name-bubble[draggable="true"] { cursor: grab; }
+  .ouvrier-name-bubble[draggable="true"]:active { cursor: grabbing; }
+  .ouvrier-name-bubble.dragging { opacity: 0.4; }
 
   /* === Adaptation cellules selon zoom 1 ou 4 semaines === */
   body.screen-1w .cell {
@@ -681,7 +684,13 @@ function migrateRessourcesSchema() {
       else { r.show_chantier = true; r.show_atelier = false; } // chantier et externe par defaut
     }
   });
+  // Init order par defaut si pas encore defini : prend l'id comme ordre stable
+  RESSOURCES.forEach((r, i) => {
+    if (r.order === undefined) r.order = i * 10; // pas de 10 pour laisser de la place a l'insertion
+  });
 }
+// Comparateur d'ordre pour trier RESSOURCES (utilise par les vues)
+const _byOrder = (a, b) => (a.order ?? 9999) - (b.order ?? 9999);
 function _showsOnChantier(c) { return !!(c && c.show_chantier); }
 function _showsOnAtelier(c)  { return !!(c && c.show_atelier); }
 function _isAtelierOnly(chId) { const c = chantierById(chId); return !!(c && c.show_atelier && !c.show_chantier); }
@@ -811,9 +820,9 @@ function renderViewOuvrier() {
       ${indispoChipsHtml}
     </div>`;
   const groups = {
-    "OUVRIERS CHANTIER": RESSOURCES.filter(r => r.cat === "chantier" && r.visible !== false && r.show_chantier),
-    "AIDE ATELIER":      RESSOURCES.filter(r => r.cat === "atelier" && r.visible !== false && r.show_chantier),
-    "EXTERNES":          RESSOURCES.filter(r => r.cat === "externe" && r.visible !== false && r.show_chantier),
+    "OUVRIERS CHANTIER": RESSOURCES.filter(r => r.cat === "chantier" && r.visible !== false && r.show_chantier).sort(_byOrder),
+    "AIDE ATELIER":      RESSOURCES.filter(r => r.cat === "atelier" && r.visible !== false && r.show_chantier).sort(_byOrder),
+    "EXTERNES":          RESSOURCES.filter(r => r.cat === "externe" && r.visible !== false && r.show_chantier).sort(_byOrder),
   };
   let html = "";
   for (const [label, list] of Object.entries(groups)) {
@@ -842,7 +851,7 @@ function renderViewOuvrier() {
         }
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
       }).join("");
-      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px] text-center"><span class="ouvrier-name-bubble cat-${r.cat}">${ouvrierLabel(r)}</span></td>${cells}</tr>`;
+      html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px] text-center" data-row-target="${r.id}"><span class="ouvrier-name-bubble cat-${r.cat}" draggable="true" data-kind="ouvrier-row" data-r="${r.id}" title="Glisser sur une autre ligne pour reordonner">${ouvrierLabel(r)}</span></td>${cells}</tr>`;
     });
   }
   document.getElementById("planning-body").innerHTML = html;
@@ -869,7 +878,7 @@ function renderViewAtelier() {
   // Les nominaux sont identifiables par leur cat=atelier (couleur indigo).
   // Les renforts (ex: ouvrier chantier marque aussi atelier) apparaissent avec leur
   // propre couleur de cat.
-  const atelierList = RESSOURCES.filter(r => r.show_atelier && r.visible !== false);
+  const atelierList = RESSOURCES.filter(r => r.show_atelier && r.visible !== false).sort(_byOrder);
   let html = "";
   atelierList.forEach(r => {
     const cells = DATES.map((d, i) => {
@@ -899,7 +908,7 @@ function renderViewAtelier() {
       }
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
     }).join("");
-    html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px]"><span class="ouvrier-name-bubble cat-${r.cat}">${ouvrierLabel(r)}</span></td>${cells}</tr>`;
+    html += `<tr class="hover:bg-slate-50"><td class="sticky left-0 bg-white border-r border-b border-slate-200 px-3 py-2 min-w-[200px] text-center" data-row-target="${r.id}"><span class="ouvrier-name-bubble cat-${r.cat}" draggable="true" data-kind="ouvrier-row" data-r="${r.id}" title="Glisser sur une autre ligne pour reordonner">${ouvrierLabel(r)}</span></td>${cells}</tr>`;
   });
   if (atelierList.length === 0) {
     html = `<tr><td colspan="${DATES.length+1}" class="p-4 text-center text-slate-500 text-sm">Aucun ouvrier atelier. Ajoute-les via Gérer &gt; Ouvriers (catégorie Atelier).</td></tr>`;
@@ -1271,6 +1280,21 @@ function setOuvrierCat(id, newCat) {
   mutateAndSync();
   openModal("ouvriers");
 }
+// Reordonne RESSOURCES en mettant srcId avant (ou apres) targetId
+function reorderRessource(srcId, targetId, dropBelow) {
+  if (srcId === targetId) return;
+  const src = RESSOURCES.find(r => r.id === srcId);
+  const tgt = RESSOURCES.find(r => r.id === targetId);
+  if (!src || !tgt) return;
+  const sorted = [...RESSOURCES].sort(_byOrder);
+  const srcIdx = sorted.indexOf(src);
+  if (srcIdx !== -1) sorted.splice(srcIdx, 1);
+  let tgtIdx = sorted.indexOf(tgt);
+  if (dropBelow) tgtIdx = tgtIdx + 1;
+  sorted.splice(tgtIdx, 0, src);
+  sorted.forEach((r, i) => r.order = i * 10);
+  mutateAndSync();
+}
 function removeOuvrier(id) {
   const r = RESSOURCES.find(x => x.id === id);
   if (!r) return;
@@ -1353,7 +1377,7 @@ function removeEquipement(id) {
 
 let dragged = null;
 function attachDragHandlers() {
-  document.querySelectorAll(".bulle[draggable='true']").forEach(el => {
+  document.querySelectorAll(".bulle[draggable='true'], .ouvrier-name-bubble[draggable='true']").forEach(el => {
     el.addEventListener("dblclick", e => {
       e.preventDefault();
       const kind = el.dataset.kind || "ouvrier";
@@ -1377,7 +1401,7 @@ function attachDragHandlers() {
       mutateAndSync();
     });
   });
-  document.querySelectorAll(".bulle[draggable='true']").forEach(el => {
+  document.querySelectorAll(".bulle[draggable='true'], .ouvrier-name-bubble[draggable='true']").forEach(el => {
     el.addEventListener("dragstart", e => {
       const kind = el.dataset.kind || "ouvrier";
       dragged = {kind:kind, r:el.dataset.r?parseInt(el.dataset.r):null, id:el.dataset.id||null, c:el.dataset.c?parseInt(el.dataset.c):null, d:el.dataset.d, type:el.dataset.type||null, el:el};
@@ -1417,6 +1441,28 @@ function attachDragHandlers() {
     });
     zone.addEventListener("dragleave", () => zone.classList.remove("drop-target","drop-forbidden"));
     zone.addEventListener("drop", e => { e.preventDefault(); zone.classList.remove("drop-target","drop-forbidden"); if (!dragged) return; handleDrop(zone); });
+  });
+  // Drop pour reordonner les lignes (vue Par ouvrier et vue Atelier)
+  document.querySelectorAll("[data-row-target]").forEach(td => {
+    td.addEventListener("dragover", e => {
+      if (!dragged || dragged.kind !== "ouvrier-row") return;
+      e.preventDefault();
+      e.dataTransfer.dropEffect = "move";
+      const targetId = parseInt(td.dataset.rowTarget);
+      if (targetId !== dragged.r) td.classList.add("drop-target");
+    });
+    td.addEventListener("dragleave", () => td.classList.remove("drop-target"));
+    td.addEventListener("drop", e => {
+      e.preventDefault();
+      td.classList.remove("drop-target");
+      if (!dragged || dragged.kind !== "ouvrier-row") return;
+      const targetId = parseInt(td.dataset.rowTarget);
+      if (targetId === dragged.r) return;
+      // Insertion avant ou apres selon la moitie de la cellule cible
+      const rect = td.getBoundingClientRect();
+      const dropBelow = (e.clientY - rect.top) > rect.height / 2;
+      reorderRessource(dragged.r, targetId, dropBelow);
+    });
   });
   const pool = document.getElementById("pool");
   if (pool) {
