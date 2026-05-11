@@ -865,7 +865,8 @@ function renderViewAtelier() {
       <span class="text-xs font-semibold text-slate-500 mr-2">Astuce :</span>
       <span class="text-xs text-slate-600">empile autant de chantiers que nécessaire sur une même journée. Double-clic sur une bulle pour la retirer.</span>
     </div>`;
-  const atelierList = RESSOURCES.filter(r => r.show_atelier && r.visible !== false);
+  // Vue Atelier : uniquement les ouvriers STRICTEMENT atelier (show_atelier sans show_chantier)
+  const atelierList = RESSOURCES.filter(r => r.show_atelier && !r.show_chantier && r.visible !== false);
   let html = "";
   atelierList.forEach(r => {
     const cells = DATES.map((d, i) => {
@@ -1043,8 +1044,9 @@ function renderViewRessources() {
 }
 
 function renderStats() {
-  // Couverture chantier : on ne compte QUE les ouvriers chantier (pas atelier, pas externes)
-  const ouvriersChantier = RESSOURCES.filter(r => r.cat === "chantier" && r.show_chantier && r.visible !== false);
+  // Couverture chantier : uniquement les ouvriers STRICTEMENT chantier
+  // (cat chantier + show_chantier coche + show_atelier NON coche, pas d'externes)
+  const ouvriersChantier = RESSOURCES.filter(r => r.cat === "chantier" && r.show_chantier && !r.show_atelier && r.visible !== false);
   const ouvIds = new Set(ouvriersChantier.map(r => r.id));
   const nbR = ouvriersChantier.length;
 
