@@ -1038,26 +1038,29 @@ function renderViewRessources() {
 }
 
 function renderStats() {
+  // Couverture chantier : on ne compte QUE les ouvriers chantier (pas atelier, pas externes)
+  const ouvriersChantier = RESSOURCES.filter(r => r.cat === "chantier" && r.show_chantier && r.visible !== false);
+  const ouvIds = new Set(ouvriersChantier.map(r => r.id));
+  const nbR = ouvriersChantier.length;
+
   const thisWeekDates = DATES.filter(d => !isWeekend(d)).slice(0,5).map(toISO);
-  const affThisWeek = AFFECTATIONS.filter(a => thisWeekDates.includes(a.d));
-  const indThisWeek = INDISPOS.filter(i => thisWeekDates.includes(i.d));
+  const affThisWeek = AFFECTATIONS.filter(a => thisWeekDates.includes(a.d) && ouvIds.has(a.r));
+  const indThisWeek = INDISPOS.filter(i => thisWeekDates.includes(i.d) && ouvIds.has(i.r));
   const activeChantiers = new Set(affThisWeek.map(a => a.c));
   const ressourcesUsed = new Set(affThisWeek.map(a => a.r));
-  const nbRessources = RESSOURCES.length;
-  const totalSlots = nbRessources * 5;
+  const totalSlots = nbR * 5;
   document.getElementById("stat-active").textContent = activeChantiers.size;
-  document.getElementById("stat-ressources").textContent = ressourcesUsed.size + "/" + nbRessources;
+  document.getElementById("stat-ressources").textContent = ressourcesUsed.size + "/" + nbR;
   document.getElementById("stat-affectations").textContent = affThisWeek.length;
   document.getElementById("stat-libre").textContent = Math.max(0, totalSlots - affThisWeek.length - indThisWeek.length);
   const allWorkDates = DATES.filter(d => !isWeekend(d)).map(toISO);
-  const allAff = AFFECTATIONS.filter(a => allWorkDates.includes(a.d));
-  const allInd = INDISPOS.filter(i => allWorkDates.includes(i.d));
-  const totalAll = nbRessources * allWorkDates.length;
+  const allAff = AFFECTATIONS.filter(a => allWorkDates.includes(a.d) && ouvIds.has(a.r));
+  const allInd = INDISPOS.filter(i => allWorkDates.includes(i.d) && ouvIds.has(i.r));
+  const totalAll = nbR * allWorkDates.length;
   const dispoAll = Math.max(1, totalAll - allInd.length); // evite division par 0
   const pct = Math.round((allAff.length / dispoAll) * 100);
   document.getElementById("stat-couverture").textContent = pct + "%";
 
-  const nbR = RESSOURCES.length;
   let cHtml = `<td class="sticky left-0 bg-white border-r border-slate-200 px-1 py-0.5 min-w-[200px]"><span class="text-[9px] font-semibold text-slate-400">COUVERTURE</span></td>`;
   DATES.forEach((d, i) => {
     const iso = toISO(d);
@@ -1066,16 +1069,17 @@ function renderStats() {
     const isMonday = i > 0 && d.getDay() === 1;
     const sepCls = isMonday ? "week-separator" : "";
     if (isSat) { cHtml += `<td class="cell-sat border-r border-slate-200 ${sepCls}"></td>`; return; }
-    const assignedIds = new Set(AFFECTATIONS.filter(a => a.d === iso).map(a => a.r));
+    // Couverture du jour : seulement ouvriers chantier (filtrage par ouvIds)
+    const assignedIds = new Set(AFFECTATIONS.filter(a => a.d === iso && ouvIds.has(a.r)).map(a => a.r));
     const assigned = assignedIds.size;
-    const indispoCount = INDISPOS.filter(i => i.d === iso).length;
+    const indispoIdsDay = new Set(INDISPOS.filter(i => i.d === iso && ouvIds.has(i.r)).map(i => i.r));
+    const indispoCount = indispoIdsDay.size;
     const dispoDay = Math.max(1, nbR - indispoCount);
     const ratio = assigned / dispoDay;
     const pctDay = Math.round(ratio * 100);
     const barColor = ratio >= 1 ? "bg-emerald-500" : ratio >= 0.7 ? "bg-amber-400" : "bg-red-400";
-    const indispoIdsDay = new Set(INDISPOS.filter(i => i.d === iso).map(i => i.r));
-    const missing = RESSOURCES.filter(r => r.visible !== false && !assignedIds.has(r.id) && !indispoIdsDay.has(r.id));
-    const indispoList = RESSOURCES.filter(r => indispoIdsDay.has(r.id));
+    const missing = ouvriersChantier.filter(r => !assignedIds.has(r.id) && !indispoIdsDay.has(r.id));
+    const indispoList = ouvriersChantier.filter(r => indispoIdsDay.has(r.id));
     let tooltipContent;
     if (missing.length === 0 && indispoList.length === 0) {
       tooltipContent = '<span class="all-ok">Tous planifiés !</span>';
