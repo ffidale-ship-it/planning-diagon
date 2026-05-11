@@ -865,8 +865,11 @@ function renderViewAtelier() {
       <span class="text-xs font-semibold text-slate-500 mr-2">Astuce :</span>
       <span class="text-xs text-slate-600">empile autant de chantiers que nécessaire sur une même journée. Double-clic sur une bulle pour la retirer.</span>
     </div>`;
-  // Vue Atelier : uniquement les ouvriers STRICTEMENT atelier (show_atelier sans show_chantier)
-  const atelierList = RESSOURCES.filter(r => r.show_atelier && !r.show_chantier && r.visible !== false);
+  // Vue Atelier : tous les ouvriers ayant le scope atelier coche (nominaux + renforts)
+  // Les nominaux sont identifiables par leur cat=atelier (couleur indigo).
+  // Les renforts (ex: ouvrier chantier marque aussi atelier) apparaissent avec leur
+  // propre couleur de cat.
+  const atelierList = RESSOURCES.filter(r => r.show_atelier && r.visible !== false);
   let html = "";
   atelierList.forEach(r => {
     const cells = DATES.map((d, i) => {
@@ -1044,9 +1047,11 @@ function renderViewRessources() {
 }
 
 function renderStats() {
-  // Couverture chantier : uniquement les ouvriers STRICTEMENT chantier
-  // (cat chantier + show_chantier coche + show_atelier NON coche, pas d'externes)
-  const ouvriersChantier = RESSOURCES.filter(r => r.cat === "chantier" && r.show_chantier && !r.show_atelier && r.visible !== false);
+  // Couverture chantier : les ouvriers rattaches a la categorie chantier
+  // (peu importe s'ils ont en plus le scope atelier coche en renfort)
+  // Le cat est le rattachement nominal. show_chantier sert juste a verifier
+  // qu'ils ne sont pas archives.
+  const ouvriersChantier = RESSOURCES.filter(r => r.cat === "chantier" && r.show_chantier && r.visible !== false);
   const ouvIds = new Set(ouvriersChantier.map(r => r.id));
   const nbR = ouvriersChantier.length;
 
