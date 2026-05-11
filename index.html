@@ -236,6 +236,8 @@
     letter-spacing: 0.5px;
   }
   .dup-btn:hover { background: #3b82f6; color: white; border-color: #3b82f6; }
+  .dup-btn.dup-btn-clear { color: #dc2626; border-color: #fecaca; }
+  .dup-btn.dup-btn-clear:hover { background: #dc2626; color: white; border-color: #dc2626; }
   th.col-sat { background: #e2e8f0 !important; }
   .coverage-cell { position: relative; cursor: pointer; }
   .coverage-cell:hover .coverage-tooltip { display: block; }
@@ -836,7 +838,7 @@ function renderViewOuvrier() {
           const color = colorChantier(aff.c);
           const lbl = ch.id === 0 ? "Atelier" : ch.nom;
           inner = `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${aff.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + ch.client + ' - ' + ch.nom}">${lbl}</span>`;
-          inner += `<div class="dup-btns"><button onclick="dupNext('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier au jour suivant">+1j</button><button onclick="dupWeek('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier jusqu'au vendredi">→ven</button></div>`;
+          inner += `<div class="dup-btns"><button onclick="dupNext('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier au jour suivant">+1j</button><button onclick="dupWeek('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier jusqu'au vendredi">→ven</button><button onclick="clearCell('ouvrier',${r.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case">✕</button></div>`;
         }
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
       }).join("");
@@ -885,8 +887,11 @@ function renderViewAtelier() {
           if (!ch) return "";
           const color = colorChantier(a.c);
           const lbl = ch.id === 0 ? "Atelier" : ch.nom;
-          return `<span class="bulle ${color}" draggable="true" data-kind="atelier-aff" data-r="${r.id}" data-c="${a.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + ch.client + ' - ' + ch.nom} - double-clic pour retirer">${lbl}</span>`;
+          return `<span class="bulle ${color}" draggable="true" data-kind="atelier-aff" data-r="${r.id}" data-c="${a.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + esc(ch.client) + ' - ' + esc(ch.nom)} - double-clic pour retirer">${esc(lbl)}</span>`;
         }).join("");
+        if (affs.length > 0) {
+          inner += `<div class="dup-btns"><button onclick="clearCell('atelier',${r.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case">✕</button></div>`;
+        }
       }
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
     }).join("");
@@ -947,7 +952,7 @@ function renderViewChantier() {
         if (!r) return "";
         return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${esc(r.nom)}">${ouvrierLabel(r)}</span>`;
       }).join("");
-      const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button></div>` : "";
+      const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button><button onclick="clearCell('chantier',${ch.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case (retirer toute l'équipe)">✕</button></div>` : "";
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${bulles}${dupBtns}</td>`;
     }).join("");
     const label = ch.id === 0
@@ -1551,6 +1556,19 @@ function dupNext(mode, id1, id2, fromD) {
   if (!_dateInView(targetD)) return;
   if (mode === "ouvrier") _dupOuvrierToDate(id1, id2, targetD);
   else if (mode === "chantier") _dupChantierToDate(id1, fromD, targetD);
+  mutateAndSync();
+}
+
+// Vider une case : mode "ouvrier" (par ouvrier vue), "chantier" (par chantier vue), "atelier" (vue atelier)
+function clearCell(mode, id1, id2, iso) {
+  if (event) event.stopPropagation();
+  if (mode === "ouvrier") {
+    AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === id1 && a.d === iso));
+  } else if (mode === "chantier") {
+    AFFECTATIONS = AFFECTATIONS.filter(a => !(a.c === id1 && a.d === iso));
+  } else if (mode === "atelier") {
+    AFFECTATIONS_ATELIER = AFFECTATIONS_ATELIER.filter(a => !(a.r === id1 && a.d === iso));
+  }
   mutateAndSync();
 }
 
