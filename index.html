@@ -14,6 +14,35 @@
     min-width: 100px; min-height: 44px; vertical-align: top;
     border-right: 1px solid #cbd5e1 !important;
     border-bottom: 1px solid #cbd5e1 !important;
+    position: relative;
+  }
+  /* Coin replie style Excel : indicateur "actions" pour une cellule chantier-jour */
+  .cell-action-corner {
+    position: absolute;
+    top: 0; right: 0;
+    width: 14px; height: 14px;
+    background: transparent;
+    border: none;
+    padding: 0;
+    cursor: pointer;
+    z-index: 6;
+  }
+  .cell-action-corner::before {
+    content: "";
+    position: absolute;
+    top: 0; right: 0;
+    width: 0; height: 0;
+    border-style: solid;
+    border-width: 0 12px 12px 0;
+    border-color: transparent #cbd5e1 transparent transparent;
+    transition: border-color 0.12s, border-width 0.12s;
+  }
+  .cell-action-corner.has-actions::before {
+    border-color: transparent #2563eb transparent transparent;
+  }
+  .cell-action-corner:hover::before {
+    border-right-color: #1d4ed8;
+    border-width: 0 14px 14px 0;
   }
   thead th {
     border-right: 1px solid #cbd5e1 !important;
@@ -754,12 +783,15 @@ function actionsListAt(c, d) {
   if (!a || !a.txt) return [];
   return a.txt.split("\n").map(l => l.trim()).filter(l => l.length > 0);
 }
-// Indicateur 📝 a injecter dans une bulle chantier qui a des actions (visuel discret)
-// Le contenu detaille est affiche au survol dans le panneau "Détail case" de la sidebar.
-function _actionsBadge(c, d) {
-  const list = actionsListAt(c, d);
-  if (list.length === 0) return "";
-  return '<span class="actions-flag" title="' + list.length + ' action(s) - survole pour voir le detail">📝</span>';
+// L'indicateur ".actions-flag" sur les bulles est remplace par un coin replie
+// sur la cellule (voir _cornerActionButton). Helper conserve mais inutilise.
+function _actionsBadge(c, d) { return ""; }
+// Genere le triangle bleu/gris en haut-droite de la cellule (style Excel).
+// Cliquable : ouvre le modal d'edition. Visuel bleu si actions presentes.
+function _cornerActionButton(c, d) {
+  const has = actionsListAt(c, d).length > 0;
+  const label = has ? "Voir / modifier les actions" : "Ajouter une action";
+  return '<button onclick="openActionsModal(' + c + ",'" + d + "'" + ')" class="cell-action-corner' + (has ? ' has-actions' : '') + '" data-c="' + c + '" data-d="' + d + '" title="' + label + '"></button>';
 }
 function showActionDetail(c, d) {
   if (c === null || c === undefined || !d) return;
@@ -1052,8 +1084,9 @@ function renderViewOuvrier() {
           const ch = chantierById(aff.c);
           const color = colorChantier(aff.c);
           const lbl = ch.id === 0 ? "Atelier" : ch.nom;
-          inner = `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${aff.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + esc(ch.client) + ' - ' + esc(ch.nom)}">${esc(lbl)}${_actionsBadge(aff.c, iso)}</span>`;
-          inner += `<div class="dup-btns"><button onclick="dupNext('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier au jour suivant">+1j</button><button onclick="dupWeek('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier jusqu'au vendredi">→ven</button><button onclick="openActionsModal(${aff.c},'${iso}')" class="dup-btn dup-btn-actions" title="Decrire les actions du chantier ce jour">📝</button><button onclick="clearCell('ouvrier',${r.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case">✕</button></div>`;
+          inner = `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${aff.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + esc(ch.client) + ' - ' + esc(ch.nom)}">${esc(lbl)}</span>`;
+          inner += `<div class="dup-btns"><button onclick="dupNext('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier au jour suivant">+1j</button><button onclick="dupWeek('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier jusqu'au vendredi">→ven</button><button onclick="clearCell('ouvrier',${r.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case">✕</button></div>`;
+          inner += _cornerActionButton(aff.c, iso);
         }
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
       }).join("");
@@ -1169,10 +1202,11 @@ function renderViewChantier() {
       const bulles = inCell.map(a => {
         const r = ressourceById(a.r);
         if (!r) return "";
-        return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${esc(r.nom)}">${ouvrierLabel(r)}${_actionsBadge(ch.id, iso)}</span>`;
+        return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${esc(r.nom)}">${ouvrierLabel(r)}</span>`;
       }).join("");
-      const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button><button onclick="openActionsModal(${ch.id},'${iso}')" class="dup-btn dup-btn-actions" title="Decrire les actions du chantier ce jour">📝</button><button onclick="clearCell('chantier',${ch.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case (retirer toute l'équipe)">✕</button></div>` : "";
-      return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${bulles}${dupBtns}</td>`;
+      const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button><button onclick="clearCell('chantier',${ch.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case (retirer toute l'équipe)">✕</button></div>` : "";
+      const cornerBtn = inCell.length > 0 ? _cornerActionButton(ch.id, iso) : "";
+      return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${bulles}${dupBtns}${cornerBtn}</td>`;
     }).join("");
     const label = ch.id === 0
       ? `<div class="font-bold text-slate-700 text-sm">ATELIER</div><div class="text-[10px] text-slate-400">Interne</div>`
@@ -1620,8 +1654,9 @@ function setEquipementType(id, newType) {
 
 let dragged = null;
 function attachDragHandlers() {
-  // Survol des bulles ayant un (chantier, jour) defini -> alimente le panneau "Detail case"
-  document.querySelectorAll(".bulle[data-c][data-d]").forEach(b => {
+  // Survol des bulles ou du triangle d'angle ayant un (chantier, jour)
+  // -> alimente le panneau "Detail case" en sidebar
+  document.querySelectorAll(".bulle[data-c][data-d], .cell-action-corner[data-c][data-d]").forEach(b => {
     const d = b.dataset.d;
     if (d === "pool" || d === "chip") return;
     const c = parseInt(b.dataset.c);
