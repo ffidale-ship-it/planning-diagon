@@ -241,6 +241,40 @@
   .dup-btn:hover { background: #3b82f6; color: white; border-color: #3b82f6; }
   .dup-btn.dup-btn-clear { color: #dc2626; border-color: #fecaca; }
   .dup-btn.dup-btn-clear:hover { background: #dc2626; color: white; border-color: #dc2626; }
+  .dup-btn.dup-btn-actions { color: #ca8a04; border-color: #fde68a; }
+  .dup-btn.dup-btn-actions:hover { background: #ca8a04; color: white; border-color: #ca8a04; }
+  /* Indicateur "actions presentes" en haut a droite de la bulle */
+  .bulle { position: relative; }
+  .actions-flag {
+    position: absolute;
+    top: -5px; right: -5px;
+    background: #fbbf24;
+    border: 1.5px solid white;
+    border-radius: 50%;
+    width: 14px; height: 14px;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 8px; line-height: 1;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.2);
+    pointer-events: none;
+  }
+  /* Popover affiche au hover de la bulle si elle contient une popover */
+  .actions-popover {
+    display: none;
+    position: absolute;
+    top: 100%; left: 50%; transform: translateX(-50%);
+    margin-top: 4px;
+    z-index: 60;
+    background: #1e293b; color: white;
+    border-radius: 8px; padding: 8px 12px;
+    font-size: 11px; min-width: 200px; max-width: 320px;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.25);
+    text-align: left; white-space: normal; font-weight: 400;
+    line-height: 1.4;
+  }
+  .actions-popover ul { margin: 0; padding-left: 16px; }
+  .actions-popover li { margin: 1px 0; }
+  .actions-popover .ap-title { font-weight: 600; margin-bottom: 4px; color: #fbbf24; font-size: 10px; text-transform: uppercase; letter-spacing: 0.5px; }
+  .bulle:hover .actions-popover { display: block; }
   th.col-sat { background: #e2e8f0 !important; }
   .coverage-cell { position: relative; cursor: pointer; }
   .coverage-cell:hover .coverage-tooltip { display: block; }
@@ -409,6 +443,27 @@
   </div>
 </div>
 
+<!-- Modal d'edition des actions du chantier-jour -->
+<div id="actions-modal" class="fixed inset-0 bg-black/40 hidden items-center justify-center z-50">
+  <div class="bg-white rounded-lg shadow-xl w-[500px] flex flex-col">
+    <div class="px-5 py-3 border-b border-slate-200 flex items-center justify-between">
+      <h2 id="actions-modal-title" class="font-semibold text-slate-800">Actions</h2>
+      <button onclick="closeActionsModal()" class="text-slate-400 hover:text-slate-600 text-2xl leading-none">&times;</button>
+    </div>
+    <div class="p-4">
+      <p class="text-xs text-slate-500 mb-2">Décris les tâches à réaliser sur ce chantier ce jour-là. <b>Une ligne = une action.</b></p>
+      <textarea id="actions-textarea" class="w-full border border-slate-300 rounded p-2 text-sm focus:outline-none focus:ring-2 focus:ring-amber-400" rows="8" placeholder="Ex:&#10;Pose bardage façade nord&#10;Livraison cassettes alu prévue à 11h&#10;Finition embases entre étages"></textarea>
+    </div>
+    <div class="px-5 py-3 border-t border-slate-200 flex justify-between gap-2">
+      <button onclick="clearActions()" class="px-3 py-1.5 text-sm bg-red-100 hover:bg-red-200 text-red-700 rounded">Effacer</button>
+      <div class="flex gap-2">
+        <button onclick="closeActionsModal()" class="px-4 py-1.5 text-sm bg-slate-100 hover:bg-slate-200 rounded">Annuler</button>
+        <button onclick="saveActions()" class="px-4 py-1.5 text-sm bg-emerald-600 hover:bg-emerald-700 text-white rounded font-semibold">Enregistrer</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <script>
 
 // === FIREBASE ===
@@ -440,6 +495,7 @@ function syncToFirebase() {
     besoins: BESOINS,
     indispos: INDISPOS,
     affectations_atelier: AFFECTATIONS_ATELIER,
+    actions: ACTIONS,
   };
   const json = JSON.stringify(payload);
   if (json === _lastSyncJson) return;
@@ -462,6 +518,7 @@ function loadFromFirebase(snap) {
   if (data.besoins) BESOINS = data.besoins;
   if (data.indispos) INDISPOS = data.indispos; else INDISPOS = [];
   if (data.affectations_atelier) AFFECTATIONS_ATELIER = data.affectations_atelier; else AFFECTATIONS_ATELIER = [];
+  if (data.actions) ACTIONS = data.actions; else ACTIONS = [];
   migrateChantiersSchema();
   migrateRessourcesSchema();
   rerender(); // affichage seul, PAS de sync retour
@@ -483,6 +540,7 @@ DB_REF.once("value", snap => {
       besoins: BESOINS,
       indispos: INDISPOS,
       affectations_atelier: AFFECTATIONS_ATELIER,
+      actions: ACTIONS,
     });
   }
   _firebaseReady = true; // maintenant le sync est autorisé
@@ -625,6 +683,64 @@ const INDISPO_TYPES = {
   formation: { label: "Formation", icon: "📚" },
 };
 function indispoAt(r, d) { return INDISPOS.find(i => i.r === r && i.d === d); }
+
+// Actions/taches a realiser sur un chantier un jour donne
+// Structure : { c: chantierId, d: "YYYY-MM-DD", txt: "ligne1\nligne2\n..." }
+let ACTIONS = [];
+function actionsAt(c, d) { return ACTIONS.find(a => a.c === c && a.d === d); }
+function actionsListAt(c, d) {
+  const a = actionsAt(c, d);
+  if (!a || !a.txt) return [];
+  return a.txt.split("\n").map(l => l.trim()).filter(l => l.length > 0);
+}
+// Genere le HTML de l'indicateur + popover a injecter dans une bulle chantier
+function _actionsBadge(c, d) {
+  const list = actionsListAt(c, d);
+  if (list.length === 0) return "";
+  const items = list.map(l => '<li>' + esc(l) + '</li>').join('');
+  return '<span class="actions-flag" title="' + list.length + ' action(s)">📝</span><div class="actions-popover" onclick="event.stopPropagation()"><div class="ap-title">Actions</div><ul>' + items + '</ul></div>';
+}
+
+// Modal d'edition des actions chantier-jour
+let _editingActions = { c: null, d: null };
+function openActionsModal(c, d) {
+  if (event) event.stopPropagation();
+  _editingActions = { c, d };
+  const ch = chantierById(c);
+  const dateStr = (() => {
+    const parts = d.split("-");
+    return parts[2] + "/" + parts[1] + "/" + parts[0];
+  })();
+  const chLabel = ch ? (ch.id === 0 ? "Atelier" : ch.id + " - " + ch.nom + (ch.client ? " (" + ch.client + ")" : "")) : "?";
+  document.getElementById("actions-modal-title").textContent = "Actions : " + chLabel + " — " + dateStr;
+  const existing = actionsAt(c, d);
+  document.getElementById("actions-textarea").value = existing ? existing.txt : "";
+  const m = document.getElementById("actions-modal");
+  m.classList.remove("hidden");
+  m.classList.add("flex");
+  setTimeout(() => document.getElementById("actions-textarea").focus(), 50);
+}
+function closeActionsModal() {
+  const m = document.getElementById("actions-modal");
+  m.classList.add("hidden");
+  m.classList.remove("flex");
+  _editingActions = { c: null, d: null };
+}
+function saveActions() {
+  const { c, d } = _editingActions;
+  if (c === null || d === null) return;
+  const txt = document.getElementById("actions-textarea").value.trim();
+  // Retire l'entree existante puis ajoute la nouvelle (si non vide)
+  ACTIONS = ACTIONS.filter(a => !(a.c === c && a.d === d));
+  if (txt.length > 0) ACTIONS.push({ c, d, txt });
+  closeActionsModal();
+  mutateAndSync();
+}
+function clearActions() {
+  if (!confirm("Effacer toutes les actions de cette case ?")) return;
+  document.getElementById("actions-textarea").value = "";
+  saveActions();
+}
 function equipementById(id) { return EQUIPEMENTS.find(e => e.id === id); }
 function livraisonById(id)  { return LIVRAISONS.find(l => l.id === id); }
 function iconEquip(type) {
@@ -846,8 +962,8 @@ function renderViewOuvrier() {
           const ch = chantierById(aff.c);
           const color = colorChantier(aff.c);
           const lbl = ch.id === 0 ? "Atelier" : ch.nom;
-          inner = `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${aff.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + ch.client + ' - ' + ch.nom}">${lbl}</span>`;
-          inner += `<div class="dup-btns"><button onclick="dupNext('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier au jour suivant">+1j</button><button onclick="dupWeek('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier jusqu'au vendredi">→ven</button><button onclick="clearCell('ouvrier',${r.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case">✕</button></div>`;
+          inner = `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${aff.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + esc(ch.client) + ' - ' + esc(ch.nom)}">${esc(lbl)}${_actionsBadge(aff.c, iso)}</span>`;
+          inner += `<div class="dup-btns"><button onclick="dupNext('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier au jour suivant">+1j</button><button onclick="dupWeek('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier jusqu'au vendredi">→ven</button><button onclick="openActionsModal(${aff.c},'${iso}')" class="dup-btn dup-btn-actions" title="Decrire les actions du chantier ce jour">📝</button><button onclick="clearCell('ouvrier',${r.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case">✕</button></div>`;
         }
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
       }).join("");
@@ -963,9 +1079,9 @@ function renderViewChantier() {
       const bulles = inCell.map(a => {
         const r = ressourceById(a.r);
         if (!r) return "";
-        return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${esc(r.nom)}">${ouvrierLabel(r)}</span>`;
+        return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${esc(r.nom)}">${ouvrierLabel(r)}${_actionsBadge(ch.id, iso)}</span>`;
       }).join("");
-      const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button><button onclick="clearCell('chantier',${ch.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case (retirer toute l'équipe)">✕</button></div>` : "";
+      const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button><button onclick="openActionsModal(${ch.id},'${iso}')" class="dup-btn dup-btn-actions" title="Decrire les actions du chantier ce jour">📝</button><button onclick="clearCell('chantier',${ch.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case (retirer toute l'équipe)">✕</button></div>` : "";
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${bulles}${dupBtns}</td>`;
     }).join("");
     const label = ch.id === 0
