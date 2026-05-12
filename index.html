@@ -1357,8 +1357,8 @@ function openModal(mode) {
         <span onclick="setChantierScope(${c.id}, 'chantier', ${!c.show_chantier})" class="scope-toggle ${c.show_chantier ? 'active' : ''}" title="Par ouvrier / Par chantier (clic pour basculer)">🏗</span>
         <span onclick="setChantierScope(${c.id}, 'atelier', ${!c.show_atelier})" class="scope-toggle ${c.show_atelier ? 'active' : ''} mr-1" title="Atelier (clic pour basculer)">🔧</span>
         <span class="text-xs font-mono text-slate-400 w-10">${c.id}</span>
-        <span class="text-xs text-slate-500 w-28 truncate">${esc(c.client)}</span>
-        <span class="text-sm text-slate-800 flex-1">${esc(c.nom)}</span>
+        <input type="text" value="${esc(c.client)}" onchange="setChantierClient(${c.id}, this.value)" class="text-xs text-slate-600 w-28 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-1 py-0.5 bg-transparent focus:outline-none" title="Client" placeholder="Client">
+        <input type="text" value="${esc(c.nom)}" onchange="renameChantier(${c.id}, this.value)" class="text-sm font-semibold text-slate-800 flex-1 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-2 py-0.5 bg-transparent focus:outline-none" title="Nom / description" placeholder="Nom du chantier">
         <button onclick="removeChantier(${c.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer définitivement">&minus;</button>
       </div>`;
     }).join("");
@@ -1414,8 +1414,13 @@ function openModal(mode) {
     const types = { nacelle: "Nacelle", camion: "Camion", remorque: "Remorque", outillage: "Outillage" };
     const rows = EQUIPEMENTS.map(e => `
       <div class="flex items-center gap-2 py-1.5 px-2 hover:bg-slate-50 rounded group" data-equip-id="${e.id}">
-        <span class="text-sm font-semibold text-slate-800 flex-1">${esc(e.nom)}</span>
-        <span class="text-xs text-slate-500 w-20">${types[e.type] || e.type}</span>
+        <input type="text" value="${esc(e.nom)}" onchange="renameEquipement('${e.id}', this.value)" class="text-sm font-semibold text-slate-800 flex-1 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-2 py-0.5 bg-transparent focus:outline-none" title="Nom" placeholder="Nom de l'equipement">
+        <select onchange="setEquipementType('${e.id}', this.value)" class="text-xs text-slate-600 w-24 border border-transparent hover:border-slate-300 focus:border-blue-500 rounded px-1 py-0.5 bg-transparent focus:outline-none">
+          <option value="nacelle"   ${e.type === 'nacelle'   ? 'selected' : ''}>Nacelle</option>
+          <option value="camion"    ${e.type === 'camion'    ? 'selected' : ''}>Camion</option>
+          <option value="remorque"  ${e.type === 'remorque'  ? 'selected' : ''}>Remorque</option>
+          <option value="outillage" ${e.type === 'outillage' ? 'selected' : ''}>Outillage</option>
+        </select>
         <button onclick="removeEquipement('${e.id}')" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer">&minus;</button>
       </div>
     `).join("");
@@ -1529,6 +1534,22 @@ function setChantierScope(id, scope, checked) {
   mutateAndSync();
   openModal("chantiers");
 }
+function renameChantier(id, newNom) {
+  const c = CHANTIERS.find(x => x.id === id);
+  if (!c) return;
+  const v = String(newNom).trim();
+  if (!v) { openModal("chantiers"); return; } // refuse vide, restore
+  c.nom = v;
+  mutateAndSync();
+}
+function setChantierClient(id, newClient) {
+  const c = CHANTIERS.find(x => x.id === id);
+  if (!c) return;
+  const v = String(newClient).trim();
+  if (!v) { openModal("chantiers"); return; }
+  c.client = v;
+  mutateAndSync();
+}
 function toggleFormScope(el) {
   const active = el.dataset.active === "1";
   el.dataset.active = active ? "0" : "1";
@@ -1579,6 +1600,22 @@ function removeEquipement(id) {
   AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => a.e !== id);
   openModal("ressources");
   mutateAndSync();
+}
+function renameEquipement(id, newNom) {
+  const e = EQUIPEMENTS.find(x => x.id === id);
+  if (!e) return;
+  const v = String(newNom).trim();
+  if (!v) { openModal("ressources"); return; }
+  e.nom = v;
+  mutateAndSync();
+}
+function setEquipementType(id, newType) {
+  const e = EQUIPEMENTS.find(x => x.id === id);
+  if (!e) return;
+  if (!["nacelle","camion","remorque","outillage"].includes(newType)) return;
+  e.type = newType;
+  mutateAndSync();
+  openModal("ressources");
 }
 
 let dragged = null;
