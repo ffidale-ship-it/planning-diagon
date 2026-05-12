@@ -794,7 +794,7 @@ document.addEventListener("DOMContentLoaded", () => { try { clearActionDetail();
 // Modal d'edition des actions chantier-jour
 let _editingActions = { c: null, d: null };
 function openActionsModal(c, d) {
-  if (event) event.stopPropagation();
+  if (typeof event !== "undefined" && event && event.stopPropagation) event.stopPropagation();
   _editingActions = { c, d };
   const ch = chantierById(c);
   const dateStr = (() => {
@@ -1884,7 +1884,7 @@ function _dupChantierToDate(chId, fromD, targetD) {
 }
 
 function dupNext(mode, id1, id2, fromD) {
-  event.stopPropagation();
+  if (typeof event !== "undefined" && event && event.stopPropagation) event.stopPropagation();
   const targetD = _getNextDate(fromD);
   if (!_dateInView(targetD)) return;
   if (mode === "ouvrier") _dupOuvrierToDate(id1, id2, targetD);
@@ -1894,7 +1894,7 @@ function dupNext(mode, id1, id2, fromD) {
 
 // Vider une case : mode "ouvrier" (par ouvrier vue), "chantier" (par chantier vue), "atelier" (vue atelier)
 function clearCell(mode, id1, id2, iso) {
-  if (event) event.stopPropagation();
+  if (typeof event !== "undefined" && event && event.stopPropagation) event.stopPropagation();
   if (mode === "ouvrier") {
     AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === id1 && a.d === iso));
   } else if (mode === "chantier") {
@@ -1906,7 +1906,7 @@ function clearCell(mode, id1, id2, iso) {
 }
 
 function dupWeek(mode, id1, id2, fromD) {
-  event.stopPropagation();
+  if (typeof event !== "undefined" && event && event.stopPropagation) event.stopPropagation();
   let currentD = fromD;
   for (let i = 0; i < 5; i++) {
     const nextD = _getNextDate(currentD);
