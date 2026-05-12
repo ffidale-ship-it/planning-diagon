@@ -270,22 +270,8 @@
   .dup-btn:hover { background: #3b82f6; color: white; border-color: #3b82f6; }
   .dup-btn.dup-btn-clear { color: #dc2626; border-color: #fecaca; }
   .dup-btn.dup-btn-clear:hover { background: #dc2626; color: white; border-color: #dc2626; }
-  .dup-btn.dup-btn-actions {
-    background: #fbbf24;
-    color: white;
-    border-color: #f59e0b;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 7px;
-    box-shadow: 0 1px 3px rgba(202, 138, 4, 0.4);
-  }
-  .dup-btn.dup-btn-actions:hover {
-    background: #d97706;
-    color: white;
-    border-color: #d97706;
-    transform: translateY(-1px);
-    box-shadow: 0 3px 6px rgba(202, 138, 4, 0.5);
-  }
+  .dup-btn.dup-btn-actions { color: #ca8a04; border-color: #fde68a; }
+  .dup-btn.dup-btn-actions:hover { background: #ca8a04; color: white; border-color: #ca8a04; }
   /* Indicateur "actions presentes" en haut a droite de la bulle */
   .bulle { position: relative; }
   .actions-flag {
@@ -786,12 +772,12 @@ function actionsListAt(c, d) {
 // L'indicateur ".actions-flag" sur les bulles est remplace par un coin replie
 // sur la cellule (voir _cornerActionButton). Helper conserve mais inutilise.
 function _actionsBadge(c, d) { return ""; }
-// Genere le triangle bleu/gris en haut-droite de la cellule (style Excel).
-// Cliquable : ouvre le modal d'edition. Visuel bleu si actions presentes.
+// Genere le triangle bleu en haut-droite de la cellule (style Excel)
+// SEULEMENT si la cellule a des actions enregistrees. Sinon retourne "".
+// Cliquable : ouvre le modal d'edition pour voir ou modifier.
 function _cornerActionButton(c, d) {
-  const has = actionsListAt(c, d).length > 0;
-  const label = has ? "Voir / modifier les actions" : "Ajouter une action";
-  return '<button onclick="openActionsModal(' + c + ",'" + d + "'" + ')" class="cell-action-corner' + (has ? ' has-actions' : '') + '" data-c="' + c + '" data-d="' + d + '" title="' + label + '"></button>';
+  if (actionsListAt(c, d).length === 0) return "";
+  return '<button onclick="openActionsModal(' + c + ",'" + d + "'" + ')" class="cell-action-corner has-actions" data-c="' + c + '" data-d="' + d + '" title="Voir / modifier les actions"></button>';
 }
 function showActionDetail(c, d) {
   if (c === null || c === undefined || !d) return;
@@ -1085,7 +1071,7 @@ function renderViewOuvrier() {
           const color = colorChantier(aff.c);
           const lbl = ch.id === 0 ? "Atelier" : ch.nom;
           inner = `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${aff.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + esc(ch.client) + ' - ' + esc(ch.nom)}">${esc(lbl)}</span>`;
-          inner += `<div class="dup-btns"><button onclick="dupNext('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier au jour suivant">+1j</button><button onclick="dupWeek('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier jusqu'au vendredi">→ven</button><button onclick="clearCell('ouvrier',${r.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case">✕</button></div>`;
+          inner += `<div class="dup-btns"><button onclick="dupNext('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier au jour suivant">+1j</button><button onclick="dupWeek('ouvrier',${r.id},${aff.c},'${iso}')" class="dup-btn" title="Copier jusqu'au vendredi">→ven</button><button onclick="openActionsModal(${aff.c},'${iso}')" class="dup-btn dup-btn-actions" title="Note / actions du chantier ce jour">📝</button><button onclick="clearCell('ouvrier',${r.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case">✕</button></div>`;
           inner += _cornerActionButton(aff.c, iso);
         }
         return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}">${inner}</td>`;
@@ -1204,7 +1190,7 @@ function renderViewChantier() {
         if (!r) return "";
         return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${esc(r.nom)}">${ouvrierLabel(r)}</span>`;
       }).join("");
-      const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button><button onclick="clearCell('chantier',${ch.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case (retirer toute l'équipe)">✕</button></div>` : "";
+      const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button><button onclick="openActionsModal(${ch.id},'${iso}')" class="dup-btn dup-btn-actions" title="Note / actions du chantier ce jour">📝</button><button onclick="clearCell('chantier',${ch.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case (retirer toute l'équipe)">✕</button></div>` : "";
       const cornerBtn = inCell.length > 0 ? _cornerActionButton(ch.id, iso) : "";
       return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-c="${ch.id}" data-d="${iso}">${bulles}${dupBtns}${cornerBtn}</td>`;
     }).join("");
@@ -1921,9 +1907,28 @@ function _dupChantierToDate(chId, fromD, targetD) {
 function dupNext(mode, id1, id2, fromD) {
   if (typeof event !== "undefined" && event && event.stopPropagation) event.stopPropagation();
   const targetD = _getNextDate(fromD);
-  if (!_dateInView(targetD)) return;
-  if (mode === "ouvrier") _dupOuvrierToDate(id1, id2, targetD);
-  else if (mode === "chantier") _dupChantierToDate(id1, fromD, targetD);
+  if (!_dateInView(targetD)) { alert("Le jour suivant n'est pas visible dans la vue actuelle."); return; }
+  if (mode === "ouvrier") {
+    // id1 = ressource id, id2 = chantier id
+    if (indispoAt(id1, targetD)) {
+      const r = ressourceById(id1);
+      alert((r ? r.nom : "Cet ouvrier") + " est en indispo le jour suivant : duplication impossible.");
+      return;
+    }
+    const conflict = AFFECTATIONS.find(a => a.r === id1 && a.d === targetD);
+    if (conflict) {
+      const r = ressourceById(id1);
+      const otherCh = chantierById(conflict.c);
+      const newCh = chantierById(id2);
+      const msg = (r ? r.nom : "L'ouvrier") + " est déjà sur \"" + (otherCh ? otherCh.nom : "?") + "\" le jour suivant.\n\nLe remplacer par \"" + (newCh ? newCh.nom : "?") + "\" ?";
+      if (!confirm(msg)) return;
+      // Retire l'ancienne affectation et ajoute la nouvelle
+      AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === id1 && a.d === targetD));
+    }
+    _dupOuvrierToDate(id1, id2, targetD);
+  } else if (mode === "chantier") {
+    _dupChantierToDate(id1, fromD, targetD);
+  }
   mutateAndSync();
 }
 
