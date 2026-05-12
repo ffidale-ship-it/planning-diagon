@@ -1917,12 +1917,14 @@ function dupNext(mode, id1, id2, fromD) {
     }
     const conflict = AFFECTATIONS.find(a => a.r === id1 && a.d === targetD);
     if (conflict) {
+      // Cas 1 : deja sur le meme chantier -> rien a faire, succes silencieux
+      if (conflict.c === id2) { mutateAndSync(); return; }
+      // Cas 2 : sur un AUTRE chantier -> demande confirmation pour remplacer
       const r = ressourceById(id1);
       const otherCh = chantierById(conflict.c);
       const newCh = chantierById(id2);
       const msg = (r ? r.nom : "L'ouvrier") + " est déjà sur \"" + (otherCh ? otherCh.nom : "?") + "\" le jour suivant.\n\nLe remplacer par \"" + (newCh ? newCh.nom : "?") + "\" ?";
       if (!confirm(msg)) return;
-      // Retire l'ancienne affectation et ajoute la nouvelle
       AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === id1 && a.d === targetD));
     }
     _dupOuvrierToDate(id1, id2, targetD);
