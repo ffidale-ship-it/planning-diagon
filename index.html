@@ -257,7 +257,63 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.2);
     pointer-events: none;
   }
-  /* Detail panel des actions (sidebar) : reagit au survol des bulles chantier */
+  /* Detail panel des actions (sidebar) : grosse bulle qui prend la couleur du chantier */
+  .bulle-detail {
+    border-radius: 22px;
+    border: 3px solid;
+    padding: 18px 20px;
+    min-height: 42vh;
+    box-shadow: 0 6px 20px rgba(0,0,0,0.08);
+    font-weight: 500;
+  }
+  .bulle-detail .bd-title {
+    font-size: 19px;
+    font-weight: 800;
+    line-height: 1.15;
+    margin-bottom: 2px;
+  }
+  .bulle-detail .bd-client {
+    font-size: 12px;
+    font-weight: 600;
+    opacity: 0.75;
+    text-transform: uppercase;
+    letter-spacing: 0.3px;
+    margin-bottom: 4px;
+  }
+  .bulle-detail .bd-date {
+    font-size: 11px;
+    opacity: 0.6;
+    margin-bottom: 14px;
+  }
+  .bulle-detail .bd-actions {
+    list-style: disc;
+    padding-left: 22px;
+    margin: 0 0 14px;
+  }
+  .bulle-detail .bd-actions li {
+    font-size: 15px;
+    line-height: 1.35;
+    margin: 6px 0;
+    font-weight: 500;
+  }
+  .bulle-detail .bd-empty { font-size: 13px; font-style: italic; opacity: 0.65; margin-bottom: 10px; }
+  .bulle-detail .bd-btn {
+    display: inline-block;
+    font-size: 12px;
+    font-weight: 600;
+    padding: 5px 12px;
+    border-radius: 14px;
+    background: rgba(255,255,255,0.55);
+    border: 1px solid currentColor;
+    opacity: 0.85;
+  }
+  .bulle-detail .bd-btn:hover { opacity: 1; background: rgba(255,255,255,0.85); }
+  .bulle-detail.empty-state {
+    background: #f8fafc;
+    color: #94a3b8;
+    border-color: #e2e8f0;
+    border-style: dashed;
+  }
   th.col-sat { background: #e2e8f0 !important; }
   .coverage-cell { position: relative; cursor: pointer; }
   .coverage-cell:hover .coverage-tooltip { display: block; }
@@ -359,13 +415,13 @@
 
   <!-- Sidebar -->
   <aside class="w-72 bg-white border-l border-slate-200 flex flex-col overflow-hidden shrink-0">
-    <!-- Panneau Detail case : se met a jour au survol d'une bulle chantier -->
-    <div id="action-detail-panel" class="p-4 border-b border-slate-200">
+    <!-- Panneau Detail case : grosse bulle a la couleur du chantier survole -->
+    <div id="action-detail-panel" class="p-3 border-b border-slate-200">
       <div class="flex items-center justify-between mb-2">
         <span class="text-xs font-semibold text-slate-600 uppercase tracking-wider">📝 Détail case</span>
         <button onclick="clearActionDetail()" class="text-[10px] text-slate-400 hover:text-slate-600 underline">effacer</button>
       </div>
-      <div id="action-detail-content" class="text-xs text-slate-400 italic">Survole une bulle de chantier pour voir ses actions du jour.</div>
+      <div id="action-detail-content"></div>
     </div>
 
     <div class="p-4 border-b border-slate-200">
@@ -697,25 +753,29 @@ function showActionDetail(c, d) {
   const list = actionsListAt(c, d);
   const parts = d.split("-");
   const dateStr = parts[2] + "/" + parts[1] + "/" + parts[0];
-  const chLabel = ch ? (ch.id === 0 ? "Atelier" : (ch.id + " - " + ch.nom)) : "?";
+  const chLabel = ch ? (ch.id === 0 ? "ATELIER DIAGON" : (ch.id + " — " + ch.nom)) : "?";
   const clientLabel = ch && ch.client ? ch.client : "";
-  let html = '<div class="font-bold text-slate-800 text-sm mb-0.5">' + esc(chLabel) + '</div>';
-  if (clientLabel) html += '<div class="text-[10px] text-slate-500 mb-1">' + esc(clientLabel) + '</div>';
-  html += '<div class="text-[10px] text-slate-500 mb-2">' + dateStr + '</div>';
+  const colorCls = colorChantier(c); // ex: "bg-blue-200 text-blue-900 border-blue-300"
+  let body = '';
+  body += '<div class="bd-title">' + esc(chLabel) + '</div>';
+  if (clientLabel) body += '<div class="bd-client">' + esc(clientLabel) + '</div>';
+  body += '<div class="bd-date">📅 ' + dateStr + '</div>';
   if (list.length === 0) {
-    html += '<div class="text-xs text-slate-400 italic">Aucune action saisie pour ce jour.</div>';
-    html += '<button onclick="openActionsModal(' + c + ',\'' + d + '\')" class="mt-2 text-xs text-amber-700 hover:text-amber-900 underline">＋ Ajouter une action</button>';
+    body += '<div class="bd-empty">Aucune action saisie pour ce jour.</div>';
+    body += '<button onclick="openActionsModal(' + c + ",'" + d + "'" + ')" class="bd-btn">＋ Ajouter une action</button>';
   } else {
-    html += '<ul class="text-sm text-slate-700 list-disc pl-5 space-y-1 mb-2">';
-    html += list.map(l => '<li>' + esc(l) + '</li>').join('');
-    html += '</ul>';
-    html += '<button onclick="openActionsModal(' + c + ',\'' + d + '\')" class="text-xs text-amber-700 hover:text-amber-900 underline">✏️ Modifier</button>';
+    body += '<ul class="bd-actions">' + list.map(l => '<li>' + esc(l) + '</li>').join('') + '</ul>';
+    body += '<button onclick="openActionsModal(' + c + ",'" + d + "'" + ')" class="bd-btn">✏️ Modifier</button>';
   }
-  document.getElementById('action-detail-content').innerHTML = html;
+  document.getElementById('action-detail-content').innerHTML =
+    '<div class="bulle-detail ' + colorCls + '">' + body + '</div>';
 }
 function clearActionDetail() {
-  document.getElementById('action-detail-content').innerHTML = '<span class="text-xs text-slate-400 italic">Survole une bulle de chantier pour voir ses actions du jour.</span>';
+  document.getElementById('action-detail-content').innerHTML =
+    '<div class="bulle-detail empty-state"><div class="bd-empty">Survole une bulle de chantier pour voir ses actions du jour.</div></div>';
 }
+// Initialisation a l'etat vide au chargement
+document.addEventListener("DOMContentLoaded", () => { try { clearActionDetail(); } catch(e){} });
 
 // Modal d'edition des actions chantier-jour
 let _editingActions = { c: null, d: null };
