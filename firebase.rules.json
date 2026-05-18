@@ -1,0 +1,8 @@
+{
+  "rules": {
+    "planning": {
+      ".read": "auth != null",
+      ".write": "auth != null"
+    }
+  }
+}
