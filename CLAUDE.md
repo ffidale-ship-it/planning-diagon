@@ -23,7 +23,7 @@ Tout est dans un seul fichier (~134KB). Contient :
 - JS monolithique avec :
   - Firebase init + sync (rerender/mutateAndSync pattern)
   - Données en mémoire : CHANTIERS (26), RESSOURCES (13), EQUIPEMENTS (8), AFFECTATIONS, LIVRAISONS, BESOINS
-  - 3 vues : Par ouvrier, Par chantier, Ressources
+  - 4 vues : Par ouvrier, Par chantier, Atelier, Ressources
   - Drag & drop HTML5
   - Duplication (jour suivant / jusqu'à vendredi)
   - Clear par jour / par semaine
@@ -82,3 +82,10 @@ Pattern critique : `rerender()` = affichage seul (jamais de sync). `mutateAndSyn
 - Langue du code : anglais pour les noms de variables/fonctions, français pour les labels UI
 - Nommage : **DIAGON** (jamais "Diagone")
 - Dates : toujours en local (pas de UTC) pour la Belgique — utiliser `_localISO()` pattern
+
+## Pièges connus
+
+- **Affectations orphelines** : `chantierById(a.c)` peut retourner `undefined` si un chantier a été supprimé par un autre user (sync Firebase asymétrique). `renderViewOuvrier` a une garde au render qui rend une cellule vide ([:1251](index.html:1251)). `renderViewChantier` filtre déjà au render ([:1369](index.html:1369)).
+- **NE PAS purger les affectations orphelines au `loadFromFirebase`** : `chantierById` utilise `===` strict, donc un id `"385"` (string) ≠ `385` (number) → une purge globale supprime des affectations VALIDES, et la prochaine mutation écrase la donnée cloud. Tentative et revert documentés dans `git show 10903a5`.
+- **Toggle 🏗 / 🔧** (`show_chantier` / `show_atelier`) : désactiver `show_chantier` sur un chantier qui a des affectations à venir crée une incohérence à 3 voix — vue par chantier cache la ligne, vue par ouvrier affiche la bulle, COUVERTURE x/x compte l'ouvrier. `setChantierScope` prévient avant l'action mais ne bloque pas.
+- **Affectations fantômes sur jours d'indispo** (sujet identifié, non-traité) : `_dupChantierToDate` ([:2075](index.html:2075)) et `_dupOuvrierToDate` ([:2069](index.html:2069), appelé par `dupWeek('ouvrier')`) ne vérifient pas `indispoAt` → un "+1j" ou "→ven" peut créer des `AFFECTATIONS` invisibles (masquées par l'overlay indispo au render) qui réapparaissent dès que l'indispo est retirée.
