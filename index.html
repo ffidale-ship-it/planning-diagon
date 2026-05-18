@@ -1729,6 +1729,16 @@ let _nextChId = 500;
 function setChantierScope(id, scope, checked) {
   const c = CHANTIERS.find(x => x.id === id);
   if (!c) return;
+  // Garde-fou : desactiver le scope chantier alors qu'il reste des affectations
+  // dans le futur (>= aujourd'hui) cache ces affectations en vue par chantier
+  // sans rien dire. On previent l'utilisateur.
+  if (scope === "chantier" && !checked) {
+    const futurAff = AFFECTATIONS.filter(a => a.c === id && a.d >= TODAY).length;
+    if (futurAff > 0) {
+      const msg = `"${c.nom}" a encore ${futurAff} affectation${futurAff > 1 ? "s" : ""} a partir d'aujourd'hui. Desactiver le scope chantier va les masquer en vue par chantier (mais elles resteront en vue par ouvrier). Continuer ?`;
+      if (!confirm(msg)) { openModal("chantiers"); return; }
+    }
+  }
   if (scope === "chantier") c.show_chantier = checked;
   else if (scope === "atelier") c.show_atelier = checked;
   // Rerender modal to update archived opacity + planning views
