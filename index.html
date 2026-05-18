@@ -774,6 +774,11 @@ function loadFromFirebase(snap) {
   if (data.actions) ACTIONS = data.actions; else ACTIONS = [];
   migrateChantiersSchema();
   migrateRessourcesSchema();
+  // Purge des affectations orphelines (chantier supprime par un autre user) :
+  // sans ca, renderViewOuvrier crashait et la vue restait coincee sur la vue precedente.
+  AFFECTATIONS = AFFECTATIONS.filter(a => chantierById(a.c));
+  AFFECTATIONS_ATELIER = AFFECTATIONS_ATELIER.filter(a => chantierById(a.c));
+  AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => chantierById(a.c));
   rerender(); // affichage seul, PAS de sync retour
 }
 
@@ -1248,6 +1253,7 @@ function renderViewOuvrier() {
           inner = `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${info.label} - double-clic pour retirer">${info.icon} ${info.label}</span>`;
         } else if (aff) {
           const ch = chantierById(aff.c);
+          if (!ch) return `<td class="cell border-r border-b border-slate-100 p-1 ${isToday ? 'cell-today' : ''} ${satCls} ${sepCls} drop-zone" data-r="${r.id}" data-d="${iso}"></td>`;
           const color = colorChantier(aff.c);
           const lbl = ch.id === 0 ? "Atelier" : ch.nom;
           inner = `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${aff.c}" data-d="${iso}" title="${ch.id === 0 ? 'Atelier Diagon' : ch.id + ' - ' + esc(ch.client) + ' - ' + esc(ch.nom)}">${esc(lbl)}</span>`;
