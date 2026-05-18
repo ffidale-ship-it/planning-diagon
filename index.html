@@ -774,11 +774,6 @@ function loadFromFirebase(snap) {
   if (data.actions) ACTIONS = data.actions; else ACTIONS = [];
   migrateChantiersSchema();
   migrateRessourcesSchema();
-  // Purge des affectations orphelines (chantier supprime par un autre user) :
-  // sans ca, renderViewOuvrier crashait et la vue restait coincee sur la vue precedente.
-  AFFECTATIONS = AFFECTATIONS.filter(a => chantierById(a.c));
-  AFFECTATIONS_ATELIER = AFFECTATIONS_ATELIER.filter(a => chantierById(a.c));
-  AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => chantierById(a.c));
   rerender(); // affichage seul, PAS de sync retour
 }
 
