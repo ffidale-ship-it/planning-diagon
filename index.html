@@ -1070,14 +1070,15 @@ function _chantierHasAffInView(chId) {
   const isoInView = new Set(DATES.map(_localISO));
   return AFFECTATIONS.some(a => a.c === chId && isoInView.has(a.d));
 }
-// Variante elargie pour la vue Ressources : "non-vide" = ouvrier planifie soit
-// cote chantier (AFFECTATIONS) soit cote atelier (AFFECTATIONS_ATELIER) dans
-// la fenetre visible. Meme logique que les autres vues, etendue pour inclure
-// les chantiers visibles en atelier-only.
-function _chantierHasWorkInView(chId) {
+// Vue Ressources : "non-vide" = au moins un equipement, livraison ou besoin
+// visible sur la ligne dans la fenetre 4 semaines. (Les ouvriers ne sont pas
+// affiches dans cette vue, donc ils ne comptent pas comme contenu visible.)
+function _chantierHasResInView(chId) {
   const isoInView = new Set(DATES.map(_localISO));
-  return AFFECTATIONS.some(a => a.c === chId && isoInView.has(a.d))
-      || AFFECTATIONS_ATELIER.some(a => a.c === chId && isoInView.has(a.d));
+  const weeksInView = new Set(DATES.map(getWeekNumber));
+  return AFFECTATIONS_EQUIP.some(a => a.c === chId && isoInView.has(a.d))
+      || LIVRAISONS.some(l => l.c === chId && isoInView.has(l.d))
+      || BESOINS.some(b => b.c === chId && weeksInView.has(b.semaine));
 }
 // Migration : derive show_chantier / show_atelier depuis les anciens champs actif / atelier_only
 function migrateChantiersSchema() {
@@ -1446,7 +1447,7 @@ function renderViewRessources() {
     : equipLibres.map(e => `<span class="bulle cat-${e.type}" draggable="true" data-kind="equip" data-id="${e.id}" data-c="-1" data-d="pool" title="${esc(e.nom)}">${iconEquip(e.type)} ${esc(e.nom)}</span>`).join("");
   const chantiersRaw = CHANTIERS.filter(c => c.show_chantier || c.show_atelier);
   const chantiersVisibles = HIDE_EMPTY_CHANTIERS
-    ? chantiersRaw.filter(c => _chantierHasWorkInView(c.id))
+    ? chantiersRaw.filter(c => _chantierHasResInView(c.id))
     : chantiersRaw;
   const allChantiers = [ATELIER, ...chantiersVisibles];
   const nbHiddenRes = chantiersRaw.length - chantiersVisibles.length;
