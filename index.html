@@ -1281,20 +1281,34 @@ function renderViewAtelier() {
     const label = c.id + " - " + esc(c.nom) + (c.show_chantier ? "" : " 🔧");
     return `<span class="bulle ${colorChantier(c.id)}" draggable="true" data-kind="chantier-chip" data-c="${c.id}" data-d="chip" style="cursor:grab">${label}</span>`;
   }).join("");
+  // Vue Atelier : tous les ouvriers ayant le scope atelier coche (nominaux + renforts)
+  // Les nominaux sont identifiables par leur cat=atelier (couleur indigo).
+  // Les renforts (ex: ouvrier chantier marque aussi atelier) apparaissent avec leur
+  // propre couleur de cat.
+  const atelierListRaw = RESSOURCES.filter(r => r.show_atelier && r.visible !== false).sort(_byOrder);
+  // "Vide" en atelier = aucun travail atelier ET aucune indispo dans la fenetre visible
+  const isoInView = new Set(DATES.map(_localISO));
+  const _ouvrierHasAtelierInView = (rId) =>
+       AFFECTATIONS_ATELIER.some(a => a.r === rId && isoInView.has(a.d))
+    || INDISPOS.some(i => i.r === rId && isoInView.has(i.d));
+  const atelierList = HIDE_EMPTY_CHANTIERS
+    ? atelierListRaw.filter(r => _ouvrierHasAtelierInView(r.id))
+    : atelierListRaw;
+  const nbHiddenAt = atelierListRaw.length - atelierList.length;
+  const hideBtnLabelAt = HIDE_EMPTY_CHANTIERS
+    ? `☑ Masquer vides${nbHiddenAt > 0 ? " (" + nbHiddenAt + " masqué" + (nbHiddenAt > 1 ? "s" : "") + ")" : ""}`
+    : `☐ Masquer vides`;
+  const hideBtnHtmlAt = `<button onclick="toggleHideEmpty()" class="ml-2 text-xs text-slate-500 hover:text-slate-700 border border-slate-300 rounded px-2 py-0.5">${hideBtnLabelAt}</button>`;
   document.getElementById("context-bar").innerHTML = `
     <div class="flex items-center gap-2 flex-wrap">
       <span class="text-xs font-semibold text-slate-500 mr-2">CHANTIERS ATELIER (plusieurs par jour OK) :</span>
       ${chipsHtml}
+      ${hideBtnHtmlAt}
     </div>
     <div class="flex items-center gap-2 flex-wrap mt-1">
       <span class="text-xs font-semibold text-slate-500 mr-2">Astuce :</span>
       <span class="text-xs text-slate-600">empile autant de chantiers que nécessaire sur une même journée. Double-clic sur une bulle pour la retirer.</span>
     </div>`;
-  // Vue Atelier : tous les ouvriers ayant le scope atelier coche (nominaux + renforts)
-  // Les nominaux sont identifiables par leur cat=atelier (couleur indigo).
-  // Les renforts (ex: ouvrier chantier marque aussi atelier) apparaissent avec leur
-  // propre couleur de cat.
-  const atelierList = RESSOURCES.filter(r => r.show_atelier && r.visible !== false).sort(_byOrder);
   let html = "";
   atelierList.forEach(r => {
     const cells = DATES.map((d, i) => {
