@@ -1032,7 +1032,7 @@ function clearActions() {
 function equipementById(id) { return EQUIPEMENTS.find(e => e.id === id); }
 function livraisonById(id)  { return LIVRAISONS.find(l => l.id === id); }
 function iconEquip(type) {
-  const m = {nacelle:"🏗",camion:"🚛",remorque:"🚛",outillage:"🔧"};
+  const m = {nacelle:"🏗",camion:"🚛",remorque:"🚛",outillage:"🔧",livraison:"🚚"};
   return m[type]||"";
 }
 
@@ -1407,8 +1407,10 @@ function renderViewChantier() {
 
 function renderViewRessources() {
   renderHeaders("Chantier");
+  // Les livraisons peuvent etre planifiees plusieurs fois le meme jour (multi-chantiers)
+  // donc on les garde toujours dans le pool, contrairement aux equipements physiques (1/jour).
   const equipPrisToday = new Set(AFFECTATIONS_EQUIP.filter(a => a.d === TODAY).map(a => a.e));
-  const equipLibres = EQUIPEMENTS.filter(e => e.visible !== false && !equipPrisToday.has(e.id));
+  const equipLibres = EQUIPEMENTS.filter(e => e.visible !== false && (e.type === "livraison" || !equipPrisToday.has(e.id)));
   const poolEquipHtml = equipLibres.length === 0
     ? '<span class="text-xs text-slate-400 italic px-2">Aucun equipement libre</span>'
     : equipLibres.map(e => `<span class="bulle cat-${e.type}" draggable="true" data-kind="equip" data-id="${e.id}" data-c="-1" data-d="pool" title="${esc(e.nom)}">${iconEquip(e.type)} ${esc(e.nom)}</span>`).join("");
@@ -1621,6 +1623,7 @@ function openModal(mode) {
           <option value="camion"    ${e.type === 'camion'    ? 'selected' : ''}>Camion</option>
           <option value="remorque"  ${e.type === 'remorque'  ? 'selected' : ''}>Remorque</option>
           <option value="outillage" ${e.type === 'outillage' ? 'selected' : ''}>Outillage</option>
+          <option value="livraison" ${e.type === 'livraison' ? 'selected' : ''}>Livraison</option>
         </select>
         <button onclick="removeEquipement('${e.id}')" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer">&minus;</button>
       </div>
@@ -1635,6 +1638,7 @@ function openModal(mode) {
             <option value="camion">Camion</option>
             <option value="remorque">Remorque</option>
             <option value="outillage">Outillage</option>
+            <option value="livraison">Livraison</option>
           </select>
           <button onclick="addEquipement()" class="bg-emerald-600 hover:bg-emerald-700 text-white rounded px-3 py-1.5 text-sm font-semibold">+</button>
         </div>
@@ -1823,7 +1827,7 @@ function renameEquipement(id, newNom) {
 function setEquipementType(id, newType) {
   const e = EQUIPEMENTS.find(x => x.id === id);
   if (!e) return;
-  if (!["nacelle","camion","remorque","outillage"].includes(newType)) return;
+  if (!["nacelle","camion","remorque","outillage","livraison"].includes(newType)) return;
   e.type = newType;
   mutateAndSync();
   openModal("ressources");
@@ -1896,9 +1900,14 @@ function attachDragHandlers() {
         if (conflict) { zone.classList.add("drop-forbidden"); return; }
       }
       if ((VIEW === "ressources" || VIEW === "chantier") && dragged.kind === "equip") {
-        const targetD = zone.dataset.d;
-        const conflict = AFFECTATIONS_EQUIP.find(a => a.e === dragged.id && a.d === targetD && !(a.c === dragged.c && a.d === dragged.d));
-        if (conflict) { zone.classList.add("drop-forbidden"); return; }
+        // Les livraisons (1 fournisseur = N chantiers/jour) sont exemptees du verrou 1/jour.
+        const draggedEquip = equipementById(dragged.id);
+        const isLivraison = draggedEquip && draggedEquip.type === "livraison";
+        if (!isLivraison) {
+          const targetD = zone.dataset.d;
+          const conflict = AFFECTATIONS_EQUIP.find(a => a.e === dragged.id && a.d === targetD && !(a.c === dragged.c && a.d === dragged.d));
+          if (conflict) { zone.classList.add("drop-forbidden"); return; }
+        }
       }
       zone.classList.add("drop-target");
     });
@@ -2015,9 +2024,15 @@ function handleDrop(zone) {
   }
   if (dragged.kind === "equip") {
     const newC = parseInt(zone.dataset.c);
+    // Les livraisons sont exemptees du verrou 1/jour (cf. dragover) :
+    // un meme fournisseur peut livrer plusieurs chantiers le meme jour.
+    const draggedEquip = equipementById(dragged.id);
+    const isLivraison = draggedEquip && draggedEquip.type === "livraison";
     if (dragged.d !== "pool") AFFECTATIONS_EQUIP = AFFECTATIONS_EQUIP.filter(a => !(a.e === dragged.id && a.c === dragged.c && a.d === dragged.d));
-    const conflict = AFFECTATIONS_EQUIP.find(a => a.e === dragged.id && a.d === newD);
-    if (conflict) { if (dragged.d !== "pool") AFFECTATIONS_EQUIP.push({e:dragged.id,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
+    if (!isLivraison) {
+      const conflict = AFFECTATIONS_EQUIP.find(a => a.e === dragged.id && a.d === newD);
+      if (conflict) { if (dragged.d !== "pool") AFFECTATIONS_EQUIP.push({e:dragged.id,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
+    }
     if (!AFFECTATIONS_EQUIP.find(a => a.e === dragged.id && a.c === newC && a.d === newD)) AFFECTATIONS_EQUIP.push({e:dragged.id,c:newC,d:newD});
     mutateAndSync(); return;
   }
