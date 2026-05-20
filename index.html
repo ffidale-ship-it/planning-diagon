@@ -53,6 +53,13 @@
   tbody tr > td:first-child {
     border-right: 1px solid #cbd5e1 !important;
   }
+  /* Marge gauche supplementaire sur la 1ere colonne (sticky) : evite que le
+     contenu soit rogne par le bord de l'ecran sur les petits affichages. */
+  thead tr > th:first-child,
+  tbody tr > th:first-child,
+  tbody tr > td:first-child {
+    padding-left: 18px !important;
+  }
   /* Zebrage vertical tres leger pour distinguer les colonnes jour */
   td.cell:nth-child(even) { background-color: rgba(148, 163, 184, 0.06); }
   td.cell.cell-sat { background-color: #f8fafc; }
