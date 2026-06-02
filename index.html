@@ -1115,7 +1115,10 @@ const PALETTE = [
   "bg-yellow-200 text-yellow-900 border-yellow-300",
   "bg-sky-200 text-sky-900 border-sky-300",
 ];
-let VIEW = "ouvrier"; // "ouvrier" | "chantier" | "ressources"
+let VIEW = "ouvrier"; // "ouvrier" | "chantier" | "ressources" | "taches"
+let TACHE_FILTER_QUI = "all";    // "all" | adminId
+let TACHE_FILTER_PRIO = "all";   // "all" | clé de PRIORITES
+let TACHE_HIDE_DONE = false;     // masquer les taches faites
 let SHOW_SATURDAY = false; // samedi masque par defaut, bouton + pour ajouter
 let USER_WEEKS = null; // null = auto (4 ou 2 atelier), sinon override (1 ou 4)
 let HIDE_EMPTY_CHANTIERS = true; // masquer chantiers actifs sans affectation dans les 4 semaines visibles
@@ -1532,13 +1535,119 @@ function renderViewChantier() {
   document.getElementById("planning-body").innerHTML = html;
 }
 
+// === TO DO LIST : CRUD (toutes les mutations passent par mutateAndSync) ===
+function addTache(c) {
+  const cVal = (c === "null" || c === null) ? null : Number(c);
+  TACHES.push({ id: _taskNextId(), c: cVal, todo: "", qui: [], priorite: "", dateButoir: "", remarque: "", fait: false });
+  mutateAndSync();
+}
+function updateTacheField(id, field, value) {
+  const t = tacheById(id); if (!t) return;
+  if (field === "fait") t.fait = !!value;
+  else if (field === "priorite") t.priorite = value;
+  else if (field === "dateButoir") t.dateButoir = value;
+  else if (field === "todo") t.todo = value;
+  else if (field === "remarque") t.remarque = value;
+  mutateAndSync();
+}
+function toggleTacheQui(id, adminId) {
+  const t = tacheById(id); if (!t) return;
+  adminId = Number(adminId);
+  const i = t.qui.indexOf(adminId);
+  if (i >= 0) t.qui.splice(i, 1); else t.qui.push(adminId);
+  mutateAndSync();
+}
+function deleteTache(id) {
+  if (!confirm("Supprimer cette tâche ?")) return;
+  TACHES = TACHES.filter(t => t.id !== id);
+  mutateAndSync();
+}
+// Filtres : affichage seul -> rerender (jamais de sync)
+function setTacheFilterQui(v) { TACHE_FILTER_QUI = v; rerender(); }
+function setTacheFilterPrio(v) { TACHE_FILTER_PRIO = v; rerender(); }
+function toggleTacheHideDone() { TACHE_HIDE_DONE = !TACHE_HIDE_DONE; rerender(); }
+
 function renderViewTaches() {
+  // Pas de grille calendrier : on vide les en-tetes planning
   document.getElementById("week-row").innerHTML = "";
   document.getElementById("day-row").innerHTML = "";
   document.getElementById("coverage-row").innerHTML = "";
-  document.getElementById("context-bar").innerHTML = "";
-  document.getElementById("planning-body").innerHTML =
-    '<tr><td class="p-6 text-slate-400">TO DO LIST — en construction</td></tr>';
+
+  // --- Barre de filtres ---
+  const adminOpts = ['<option value="all">Tous</option>']
+    .concat(admins().sort(_byOrder).map(a =>
+      `<option value="${a.id}" ${TACHE_FILTER_QUI == a.id ? "selected" : ""}>${esc(adminInitials(a.nom))} — ${esc(a.nom)}</option>`))
+    .join("");
+  const prioOpts = ['<option value="all">Toutes</option>']
+    .concat(Object.entries(PRIORITES).map(([k, p]) =>
+      `<option value="${k}" ${TACHE_FILTER_PRIO === k ? "selected" : ""}>${esc(p.label)}</option>`))
+    .join("");
+  document.getElementById("context-bar").innerHTML = `
+    <div class="todo-filters">
+      <span class="text-xs font-semibold text-slate-500">FILTRES :</span>
+      <label>QUI <select class="todo-inp" style="width:auto" onchange="setTacheFilterQui(this.value)">${adminOpts}</select></label>
+      <label>Priorité <select class="todo-inp" style="width:auto" onchange="setTacheFilterPrio(this.value)">${prioOpts}</select></label>
+      <label><input type="checkbox" ${TACHE_HIDE_DONE ? "checked" : ""} onchange="toggleTacheHideDone()"> Masquer les faites</label>
+    </div>`;
+
+  // --- Filtrage ---
+  const visible = TACHES.filter(t => {
+    if (TACHE_HIDE_DONE && t.fait) return false;
+    if (TACHE_FILTER_QUI !== "all" && !(t.qui || []).includes(Number(TACHE_FILTER_QUI))) return false;
+    if (TACHE_FILTER_PRIO !== "all" && t.priorite !== TACHE_FILTER_PRIO) return false;
+    return true;
+  });
+
+  // --- Groupement par chantier (ordre des chantiers), puis Général (c===null) ---
+  const groupKeys = [];
+  CHANTIERS.forEach(c => { if (c.id !== 0) groupKeys.push(c.id); });
+  // chantiers cites dans les taches mais absents de CHANTIERS (ex: 418/419/420)
+  visible.forEach(t => { if (t.c !== null && !groupKeys.includes(t.c)) groupKeys.push(t.c); });
+  groupKeys.push(null); // Général en dernier
+
+  const groupLabel = (key) => {
+    if (key === null) return "Général / sans chantier";
+    const ch = chantierById(key);
+    return ch ? (key + " - " + ch.nom) : (key + " - (chantier non listé)");
+  };
+
+  // --- Rendu ---
+  const adminList = admins().sort(_byOrder);
+  let html = '<tr><td><div class="todo-wrap">';
+  groupKeys.forEach(key => {
+    const rows = visible.filter(t => t.c === key);
+    const all = TACHES.filter(t => t.c === key);
+    if (!rows.length && !all.length) return; // groupe totalement vide : on saute
+    html += `<div class="todo-group-title">${esc(groupLabel(key))}</div>`;
+    html += `<table class="todo-table"><thead><tr>
+      <th style="width:32%">À faire</th><th style="width:10%">QUI</th><th style="width:10%">Priorité</th>
+      <th style="width:12%">Date butoir</th><th style="width:26%">Remarque</th><th style="width:5%">Fait</th><th style="width:5%"></th>
+    </tr></thead><tbody>`;
+    rows.forEach(t => {
+      const quiHtml = adminList.map(a => {
+        const on = (t.qui || []).includes(a.id);
+        return `<span class="qui-pill" style="cursor:pointer;${on ? "" : "opacity:.3"}" onclick="toggleTacheQui(${t.id},${a.id})" title="${esc(a.nom)}">${esc(adminInitials(a.nom))}</span>`;
+      }).join("");
+      const prioSel = ['<option value="">—</option>'].concat(Object.entries(PRIORITES).map(([k, p]) =>
+        `<option value="${k}" ${t.priorite === k ? "selected" : ""}>${esc(p.label)}</option>`)).join("");
+      const dot = t.priorite && PRIORITES[t.priorite]
+        ? `<span class="prio-dot" style="background:${PRIORITES[t.priorite].color}"></span> ` : "";
+      html += `<tr class="${t.fait ? "done" : ""}">
+        <td><input class="todo-inp" value="${esc(t.todo)}" onchange="updateTacheField(${t.id},'todo',this.value)"></td>
+        <td>${quiHtml}</td>
+        <td>${dot}<select class="todo-inp" style="width:auto" onchange="updateTacheField(${t.id},'priorite',this.value)">${prioSel}</select></td>
+        <td><input type="date" class="todo-inp" value="${esc(t.dateButoir)}" onchange="updateTacheField(${t.id},'dateButoir',this.value)"></td>
+        <td><input class="todo-inp" value="${esc(t.remarque)}" onchange="updateTacheField(${t.id},'remarque',this.value)"></td>
+        <td style="text-align:center"><input type="checkbox" ${t.fait ? "checked" : ""} onchange="updateTacheField(${t.id},'fait',this.checked)"></td>
+        <td style="text-align:center"><span class="todo-del" onclick="deleteTache(${t.id})" title="Supprimer">✕</span></td>
+      </tr>`;
+    });
+    html += `</tbody></table>`;
+    const cArg = key === null ? "null" : key;
+    html += `<button class="todo-add-btn" onclick="addTache(${cArg})">+ Ajouter une tâche</button>`;
+  });
+  html += '</div></td></tr>';
+  document.getElementById("planning-body").innerHTML = html;
 }
 
 function renderViewRessources() {
