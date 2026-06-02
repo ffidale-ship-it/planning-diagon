@@ -832,7 +832,9 @@ function loadFromFirebase(snap) {
 // Cette fonction est appelée par onAuthStateChanged après login réussi
 function initDataSync() {
   DB_REF.once("value", snap => {
-    if (snap.val()) {
+    const existing = snap.val();
+    const hadTaches = !!(existing && existing.taches);
+    if (existing) {
       loadFromFirebase(snap); // charge les données existantes
     } else {
       // DB vide → push les données par défaut
@@ -856,6 +858,13 @@ function initDataSync() {
     // la correction une seule fois dans Firebase.
     if (_dedupChanged > 0) {
       console.log("[DIAGON] " + _dedupChanged + " ID(s) ouvrier en doublon corrige(s) -> sauvegarde Firebase");
+      syncToFirebase();
+    }
+
+    // Seed unique des taches (premier deploiement : la cle "taches" n'existe pas encore)
+    if (seedTachesIfNeeded(hadTaches)) {
+      console.log("[DIAGON] Seed TO DO LIST : " + TACHES.length + " taches importees -> sauvegarde Firebase");
+      rerender();
       syncToFirebase();
     }
 
@@ -1003,6 +1012,122 @@ function indispoAt(r, d) { return INDISPOS.find(i => i.r === r && i.d === d); }
 // Structure : { c: chantierId, d: "YYYY-MM-DD", txt: "ligne1\nligne2\n..." }
 let ACTIONS = [];
 let TACHES = []; // TO DO LIST : taches par chantier, synchro Firebase (cle "taches")
+
+// Mapping canonique des admins (initiales -> nom) pour resoudre le seed QUI.
+const ADMIN_SEED_MAP = { JN: "Julie Noville", KB: "Kévin Bernard", OG: "Olivier Gillet", FF: "François Fidale", LD: "Laurent Delehouse" };
+// 77 taches reprises de l'Excel TO DO LIST (qui = initiales, resolues en ids au seed).
+const TACHES_SEED = [
+  { c:385, todo:"Commander stacbond", qui:["KB"], priorite:"", dateButoir:"2026-04-17", remarque:"Dimension plafond stacbond Anodic Light.8pc de 1500/5000 : livraison 27/05", fait:true },
+  { c:385, todo:"FACTURER 200€ SUPPLEMENT MB TRANSPORT ISOLANTS", qui:["KB","FF"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:385, todo:"Vérifier M2 magnélis par rapport à commande -> rampe en plus ?", qui:["OG","FF"], priorite:"normale", dateButoir:"", remarque:"Vérifier CSC et métré - Pas le même travail de faire une rampe ou des tôles planes", fait:false },
+  { c:385, todo:"Réparation autour de la passerelle à chiffrer", qui:["KB"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:385, todo:"Réparation de deux tôles abîmées par un sous-traitant à chiffrer", qui:["KB"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:396, todo:"Lever les points de RP", qui:["KB","OG"], priorite:"", dateButoir:"", remarque:"Retourner TD arrière + rejet d'eau sur rive pignon", fait:false },
+  { c:399, todo:"Pliage des tôles en magnélis dessus escalier", qui:["KB"], priorite:"critique", dateButoir:"", remarque:"", fait:false },
+  { c:399, todo:"Fixer date montage filets garde-corps", qui:["KB","LD"], priorite:"critique", dateButoir:"", remarque:"", fait:false },
+  { c:399, todo:"Pose escalier et passerelles", qui:[], priorite:"", dateButoir:"", remarque:"Pose 01/06", fait:true },
+  { c:399, todo:"Bardage zone PAC", qui:["KB","LD","OG"], priorite:"elevee", dateButoir:"", remarque:"Tôles commandées (attente date livraison) - Pose 08/06", fait:false },
+  { c:399, todo:"Pose tôle alu anodisé sur pignon", qui:[], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:400, todo:"Toiture posée - Lever les remarques", qui:["KB","OG"], priorite:"elevee", dateButoir:"", remarque:"Aller mesurer les finitions - En attente retour DE GRAEVE pour intervenir", fait:false },
+  { c:401, todo:"Livraison bac de toiture", qui:[], priorite:"", dateButoir:"", remarque:"46177", fait:true },
+  { c:401, todo:"Partie 3 : Dessiner auvent + commande matériaux", qui:["LD"], priorite:"critique", dateButoir:"", remarque:"Tout est commandé - plat + poutres (Liv:22/05) + bac de toiture (Liv:26/05) - plan assemblage ok - plan montage ok", fait:true },
+  { c:401, todo:"Retirer les gouttières du décompte (Posées par couvreur)", qui:["KB","OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:401, todo:"offre de prix Isolation structure", qui:["LD"], priorite:"", dateButoir:"2026-04-21", remarque:"Prix refusé - en attente retour EG", fait:false },
+  { c:401, todo:"Partie 2 : Finitions à commander", qui:["KB"], priorite:"critique", dateButoir:"", remarque:"livraison 28/05/2026", fait:true },
+  { c:401, todo:"Facturer les tôles de bardage abîmées à PICARD", qui:["KB"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:404, todo:"Suivi permis", qui:["OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:404, todo:"Dessiner + commande matériaux", qui:["LD"], priorite:"faible", dateButoir:"", remarque:"", fait:false },
+  { c:404, todo:"Relever bâtiment", qui:["KB","OG"], priorite:"", dateButoir:"", remarque:"Date a définir", fait:false },
+  { c:405, todo:"Bat arr. : Commander tôle bardage + tôles de finition + support + fixations", qui:["LD","OG"], priorite:"elevee", dateButoir:"", remarque:"Tôle validée par client : JI 25-115-1035  RAL 7016", fait:false },
+  { c:405, todo:"Bat av. : Relever façade quand isolant posé", qui:[], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:405, todo:"Isolant livré à l'atelier 13/04 avec fixations", qui:["OG"], priorite:"", dateButoir:"", remarque:"Reçu isolant, fixations et tape", fait:true },
+  { c:405, todo:"Trespa de stock chez BIEMAR", qui:[], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:405, todo:"Planning", qui:["KB","OG"], priorite:"", dateButoir:"", remarque:"Démarrage DIAGON 01/06/26", fait:true },
+  { c:405, todo:"Type de nacelle à confirmer ultérieurement avec L. BOVEROUX", qui:["KB","OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:405, todo:"Prévoir renfort vertical pour tuyaux de descente", qui:["KB","LD","OG"], priorite:"normale", dateButoir:"", remarque:"", fait:false },
+  { c:405, todo:"Coactivité techniques spéciales", qui:[], priorite:"", dateButoir:"", remarque:"Besoin de 2 jours de démontage avant nous et 3 jours de remontage après nous", fait:false },
+  { c:406, todo:"Pose corniches en sous-traitance", qui:["KB","OG"], priorite:"critique", dateButoir:"", remarque:"Calculer en fonction de notre prix - Prestations Dominique à 60€/h", fait:false },
+  { c:406, todo:"Planning pose gouttières et TD", qui:[], priorite:"", dateButoir:"", remarque:"05/06 + 08/06 + 09/06", fait:false },
+  { c:406, todo:"Toles de finition", qui:[], priorite:"", dateButoir:"", remarque:"livraison: 26/05/26", fait:false },
+  { c:406, todo:"Commander 2 tôles de zinc + 2 m de TD zinc diam 160 pour naissances", qui:["KB"], priorite:"critique", dateButoir:"", remarque:"", fait:false },
+  { c:407, todo:"Livraison STACBOND le 27/04 chez CAREMISO", qui:["KB"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:407, todo:"Mesurer façades pour affiner calepinage vertical après pose châssis", qui:["KB","OG"], priorite:"critique", dateButoir:"", remarque:"", fait:true },
+  { c:407, todo:"Planning intervention DIAGON", qui:[], priorite:"", dateButoir:"", remarque:"démarrage 20/05", fait:true },
+  { c:407, todo:"Commander fixations,...", qui:["LD"], priorite:"elevee", dateButoir:"", remarque:"ok- 900 pces fm x3 à l'atlier", fait:true },
+  { c:407, todo:"Vérifier que tous les accessoires soient bien commandés", qui:["LD"], priorite:"critique", dateButoir:"2026-03-27", remarque:"Commander grilles et oméga", fait:true },
+  { c:407, todo:"Echantillon STACBOND gris ardoise à fournir", qui:["KB"], priorite:"", dateButoir:"", remarque:"Transmis sur chantier le 08/05/26", fait:true },
+  { c:407, todo:"Commander les toles sèche.", qui:["KB","LD"], priorite:"critique", dateButoir:"2026-04-14", remarque:"échantillon commandé 08/04/26", fait:false },
+  { c:408, todo:"Commander isolant, fixations,... pour Stacbond et Renson", qui:["LD"], priorite:"", dateButoir:"2026-02-25", remarque:"ok isolant +fixation PIR + Pare-pluie + fixation STACBOND - Rappeler à Alex de livrer nos fixations", fait:false },
+  { c:408, todo:"Commander RENSON", qui:["KB","OG"], priorite:"", dateButoir:"2026-06-08", remarque:"", fait:false },
+  { c:410, todo:"Planning", qui:["KB"], priorite:"", dateButoir:"", remarque:"Fin mai", fait:false },
+  { c:410, todo:"Commander tôles", qui:["KB","LD"], priorite:"", dateButoir:"", remarque:"Livraison 27/05", fait:false },
+  { c:412, todo:"Planning", qui:[], priorite:"", dateButoir:"", remarque:"Mi-juin", fait:false },
+  { c:412, todo:"Dessiner cadre metallique  ( dimension a adapter apres mesurage)", qui:["LD"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:412, todo:"Mesurage pour fabrication", qui:["KB"], priorite:"", dateButoir:"", remarque:"Mesurage 19/05", fait:false },
+  { c:413, todo:"Intervention DIAGON vers juin/juillet", qui:["KB","OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:413, todo:"Calepinnage Trespa", qui:["LD"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:414, todo:"Poutre treilli à dessiner", qui:["LD"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:414, todo:"Intervention DIAGON mi-juin", qui:["KB","OG"], priorite:"elevee", dateButoir:"", remarque:"Commander panneaux", fait:false },
+  { c:414, todo:"Analyser détail bandeaux façades", qui:["OG"], priorite:"", dateButoir:"", remarque:"Attente confirmation PICARD sur position buses chauffage", fait:false },
+  { c:414, todo:"Descentes PE extérieures - Voir pour pose (jonctions soudées)", qui:["OG"], priorite:"", dateButoir:"", remarque:"analyser jonction avaloir toiture vers PE", fait:false },
+  { c:414, todo:"Quid passer les habillage en tôle vers STACBOND", qui:["OG","LD"], priorite:"", dateButoir:"", remarque:"Variante STACBOND et tôles post-laquées à soumettre à PICARD", fait:false },
+  { c:414, todo:"Plan de calepinage STACBOND et tôle", qui:["OG"], priorite:"elevee", dateButoir:"", remarque:"", fait:false },
+  { c:415, todo:"Aller mesurer caillebotti + commande", qui:["KB"], priorite:"", dateButoir:"", remarque:"Mesurage 10/04", fait:false },
+  { c:415, todo:"Réclamer BDC à Nicolas Lelotte", qui:["OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:415, todo:"Remettre prix pour habillages - voir mail", qui:["KB","OG"], priorite:"", dateButoir:"", remarque:"Mesurage 10/04", fait:false },
+  { c:417, todo:"Panneaux sandwich RAL 9007", qui:["OG","KB"], priorite:"", dateButoir:"", remarque:"Délai au 24/04 : prod semaine 22 et fourniture semaine 23", fait:false },
+  { c:417, todo:"Livraison Joris", qui:[], priorite:"", dateButoir:"", remarque:"Toles planes ( 26-05) - Panneaux sandwich ( 29-06)", fait:false },
+  { c:417, todo:"Commander isolant et panneaux sandwich", qui:["KB","OG"], priorite:"critique", dateButoir:"", remarque:"", fait:true },
+  { c:418, todo:"Envoyer FT", qui:["OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:418, todo:"Passer commande pour PIR", qui:["OG"], priorite:"", dateButoir:"", remarque:"Livraison début juillet sous réserve qu'on puisse démarrer.", fait:false },
+  { c:419, todo:"Envoyer FT", qui:["OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:419, todo:"Envoyer plans", qui:["LD","OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:null, todo:"1000mc de CLS   plus de 2000mc de voliges", qui:["LD","OG"], priorite:"", dateButoir:"2026-04-08", remarque:"", fait:true },
+  { c:null, todo:"Placement accessoires Nico Lelotte", qui:["KB"], priorite:"", dateButoir:"2026-03-04", remarque:"", fait:true },
+  { c:null, todo:"Prévoir le démontage de la barrière au dépot car montage de la nouvelle en semaine 14", qui:["KB","FF"], priorite:"", dateButoir:"2026-03-27", remarque:"fondation 10/04. et pose barrière le 15/04", fait:true },
+  { c:419, todo:"Passer commande pour PIR", qui:["OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:420, todo:"Envoyer Fiches technique", qui:["OG"], priorite:"elevee", dateButoir:"", remarque:"FT PS vulcasteel + ardoise envoyé - reste les autres", fait:false },
+  { c:null, todo:"Relancer Philippe Haggelstein pour dossier SERAING", qui:["OG","FF"], priorite:"", dateButoir:"", remarque:"fait le 01/04  on va le recevoir", fait:false },
+  { c:null, todo:"Boite a lettre michmich", qui:["KB"], priorite:"elevee", dateButoir:"", remarque:"", fait:false },
+  { c:null, todo:"Mail urgent chez Joriside pour gestion problème commande", qui:["KB","OG","FF"], priorite:"", dateButoir:"", remarque:"Joriside propose un geste commercial de 50% sur les panneaux recommandés.  UPDATE 07/04 NC pas encore recue", fait:true },
+  { c:null, todo:"Pliage des finitions", qui:["KB"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:null, todo:"Offre de prix selon mesurage", qui:["KB","LD","OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:null, todo:"MATOUL-GOORE", qui:["LD","OG"], priorite:"", dateButoir:"", remarque:"", fait:false },
+  { c:null, todo:"MY HOTEL MALMEDY", qui:["KB","OG"], priorite:"", dateButoir:"2026-05-15", remarque:"replacer un seuil et refixer des visses.", fait:false },
+];
+
+// Cree les admins manquants (idempotent) puis renvoie une map initiales -> id.
+function ensureSeedAdmins() {
+  Object.entries(ADMIN_SEED_MAP).forEach(([init, nom]) => {
+    if (!adminByInitials(init)) {
+      const id = Math.max(99, ...RESSOURCES.map(r => Number(r.id) || 0)) + 1;
+      RESSOURCES.push({ id, nom, cat: "admin", visible: true, show_chantier: false, show_atelier: false, order: id * 10 });
+    }
+  });
+  const map = {};
+  admins().forEach(a => { map[adminInitials(a.nom)] = a.id; });
+  return map;
+}
+
+// Importe les 77 taches une seule fois. alreadyHadTaches = true si la cle "taches"
+// existait deja dans Firebase (=> ne pas re-seeder). Renvoie true si un seed a eu lieu.
+function seedTachesIfNeeded(alreadyHadTaches) {
+  if (alreadyHadTaches) return false;      // deja seede une fois
+  if (TACHES.length > 0) return false;      // securite
+  const initMap = ensureSeedAdmins();
+  TACHES = TACHES_SEED.map((s, i) => ({
+    id: i + 1,
+    c: s.c,
+    todo: s.todo,
+    qui: (s.qui || []).map(init => initMap[init]).filter(id => id != null),
+    priorite: s.priorite,
+    dateButoir: s.dateButoir,
+    remarque: s.remarque,
+    fait: s.fait,
+  }));
+  return true;
+}
+
 function actionsAt(c, d) { return ACTIONS.find(a => a.c === c && a.d === d); }
 function actionsListAt(c, d) {
   const a = actionsAt(c, d);
