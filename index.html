@@ -120,6 +120,24 @@
   #btn-view-chantier.active   { background: #f97316; }
   #btn-view-atelier.active    { background: #ef4444; }
   #btn-view-ressources.active { background: #10b981; }
+  /* TO DO LIST : bouton decale + plus gros pour le differencier des vues planning */
+  .view-bubble.todo-tab { margin-left: 28px; padding: 16px 30px; min-width: 140px; border: 2px solid #6366f1; }
+  .view-bubble.todo-tab .v-icon { font-size: 34px; }
+  .view-bubble.todo-tab .v-label { font-size: 15px; }
+  #btn-view-taches.active { background: #6366f1; } /* indigo */
+  /* Table TO DO LIST */
+  .todo-wrap { padding: 0 24px 40px; }
+  .todo-group-title { font-size: 13px; font-weight: 800; color: #334155; text-transform: uppercase; margin: 18px 0 6px; }
+  table.todo-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  table.todo-table th { text-align: left; font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; padding: 4px 8px; border-bottom: 1px solid #e2e8f0; }
+  table.todo-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
+  table.todo-table tr.done td { opacity: 0.5; text-decoration: line-through; }
+  .prio-dot { display: inline-block; width: 12px; height: 12px; border-radius: 50%; }
+  .qui-pill { display: inline-block; background: #e0e7ff; color: #3730a3; font-weight: 700; font-size: 11px; border-radius: 8px; padding: 1px 6px; margin-right: 3px; }
+  .todo-inp { width: 100%; border: 1px solid #cbd5e1; border-radius: 4px; padding: 2px 6px; font-size: 13px; }
+  .todo-add-btn { font-size: 12px; color: #6366f1; border: 1px dashed #c7d2fe; border-radius: 6px; padding: 3px 10px; margin-top: 4px; cursor: pointer; background: #fff; }
+  .todo-del { color: #ef4444; cursor: pointer; font-weight: 700; }
+  .todo-filters { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px; }
 
   /* === Scope toggles (🏗 / 🔧) dans les modals === */
   .scope-toggle {
