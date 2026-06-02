@@ -1673,6 +1673,7 @@ function updateTacheField(id, field, value) {
   else if (field === "dateButoir") t.dateButoir = value;
   else if (field === "todo") t.todo = value;
   else if (field === "remarque") t.remarque = value;
+  else if (field === "c") t.c = (value === "" || value === "null") ? null : Number(value);
   mutateAndSync();
 }
 function toggleTacheQui(id, adminId) {
@@ -1745,13 +1746,18 @@ function renderViewTaches() {
 
   // --- Rendu ---
   const adminList = admins().sort(_byOrder);
+  // Chantiers proposables pour (re)affecter une tache : les chantiers actifs.
+  const chantierChoices = CHANTIERS.filter(c => {
+    if (c.id === 0) return false;
+    return c.show_chantier === undefined ? c.actif !== false : c.show_chantier;
+  }).map(c => ({ id: c.id, nom: c.nom }));
   let html = '<tr><td><div class="todo-wrap">';
   groupKeys.forEach(key => {
     const rows = visible.filter(t => t.c === key);
     html += `<div class="todo-group-title">${esc(groupLabel(key))}</div>`;
     html += `<table class="todo-table"><thead><tr>
-      <th style="width:32%">À faire</th><th style="width:10%">QUI</th><th style="width:10%">Priorité</th>
-      <th style="width:12%">Date butoir</th><th style="width:26%">Remarque</th><th style="width:5%">Fait</th><th style="width:5%"></th>
+      <th style="width:24%">À faire</th><th style="width:14%">Chantier</th><th style="width:9%">QUI</th><th style="width:9%">Priorité</th>
+      <th style="width:11%">Date butoir</th><th style="width:23%">Remarque</th><th style="width:5%">Fait</th><th style="width:5%"></th>
     </tr></thead><tbody>`;
     rows.forEach(t => {
       const quiHtml = adminList.map(a => {
@@ -1762,8 +1768,19 @@ function renderViewTaches() {
         `<option value="${k}" ${t.priorite === k ? "selected" : ""}>${esc(p.label)}</option>`)).join("");
       const dot = t.priorite && PRIORITES[t.priorite]
         ? `<span class="prio-dot" style="background:${PRIORITES[t.priorite].color}"></span> ` : "";
+      let chOpts = `<option value=""${t.c === null ? " selected" : ""}>Général / sans chantier</option>`;
+      let chFound = false;
+      chantierChoices.forEach(c => {
+        if (c.id === t.c) chFound = true;
+        chOpts += `<option value="${c.id}"${c.id === t.c ? " selected" : ""}>${esc(c.id + " - " + c.nom)}</option>`;
+      });
+      if (t.c !== null && !chFound) {
+        const ch0 = chantierById(t.c);
+        chOpts += `<option value="${t.c}" selected>${esc(t.c + " - " + (ch0 ? ch0.nom : "(chantier non listé)"))}</option>`;
+      }
       html += `<tr class="${t.fait ? "done" : ""}">
         <td><input class="todo-inp" value="${esc(t.todo)}" onchange="updateTacheField(${t.id},'todo',this.value)"></td>
+        <td><select class="todo-inp" onchange="updateTacheField(${t.id},'c',this.value)">${chOpts}</select></td>
         <td>${quiHtml}</td>
         <td>${dot}<select class="todo-inp" style="width:auto" onchange="updateTacheField(${t.id},'priorite',this.value)">${prioSel}</select></td>
         <td><input type="date" class="todo-inp" value="${esc(t.dateButoir)}" onchange="updateTacheField(${t.id},'dateButoir',this.value)"></td>
