@@ -1248,6 +1248,7 @@ let VIEW = "ouvrier"; // "ouvrier" | "chantier" | "ressources" | "taches"
 let TACHE_FILTER_QUI = "all";    // "all" | adminId
 let TACHE_FILTER_PRIO = "all";   // "all" | clé de PRIORITES
 let TACHE_HIDE_DONE = false;     // masquer les taches faites
+let TACHE_HIDE_EMPTY = false;    // masquer les chantiers sans tache
 let SHOW_SATURDAY = false; // samedi masque par defaut, bouton + pour ajouter
 let USER_WEEKS = null; // null = auto (4 ou 2 atelier), sinon override (1 ou 4)
 let HIDE_EMPTY_CHANTIERS = true; // masquer chantiers actifs sans affectation dans les 4 semaines visibles
@@ -1697,6 +1698,7 @@ function setTacheFilterQui(v) { TACHE_FILTER_QUI = v; rerender(); }
 function toggleTacheFilterQui(v) { TACHE_FILTER_QUI = (String(TACHE_FILTER_QUI) === String(v)) ? "all" : v; rerender(); }
 function setTacheFilterPrio(v) { TACHE_FILTER_PRIO = v; rerender(); }
 function toggleTacheHideDone() { TACHE_HIDE_DONE = !TACHE_HIDE_DONE; rerender(); }
+function toggleTacheHideEmpty() { TACHE_HIDE_EMPTY = !TACHE_HIDE_EMPTY; rerender(); }
 
 function renderViewTaches() {
   // Pas de grille calendrier : on vide les en-tetes planning
@@ -1718,6 +1720,7 @@ function renderViewTaches() {
       <label>QUI <span class="qui-filter-row">${quiBtns}</span></label>
       <label>Priorité <select class="todo-inp" style="width:auto" onchange="setTacheFilterPrio(this.value)">${prioOpts}</select></label>
       <label><input type="checkbox" ${TACHE_HIDE_DONE ? "checked" : ""} onchange="toggleTacheHideDone()"> Masquer les faites</label>
+      <label><input type="checkbox" ${TACHE_HIDE_EMPTY ? "checked" : ""} onchange="toggleTacheHideEmpty()"> Masquer les chantiers sans tâche</label>
     </div>`;
 
   // --- Filtrage ---
@@ -1758,6 +1761,7 @@ function renderViewTaches() {
   let html = '<tr><td><div class="todo-wrap">';
   groupKeys.forEach(key => {
     const rows = visible.filter(t => t.c === key);
+    if (TACHE_HIDE_EMPTY && rows.length === 0) return;
     html += `<div class="todo-group-title">${esc(groupLabel(key))}</div>`;
     html += `<table class="todo-table"><thead><tr>
       <th style="width:24%">À faire</th><th style="width:14%">Chantier</th><th style="width:9%">QUI</th><th style="width:9%">Priorité</th>
