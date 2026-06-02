@@ -1231,6 +1231,26 @@ function getWeekNumber(d) {
 }
 function ressourceById(id) { return RESSOURCES.find(r => r.id === id); }
 function chantierById(id) { return id === 0 ? ATELIER : CHANTIERS.find(c => c.id === id); }
+// === TO DO LIST helpers ===
+const PRIORITES = {
+  faible:   { label: "Faible",   color: "#22c55e" }, // vert
+  normale:  { label: "Normale",  color: "#eab308" }, // jaune
+  elevee:   { label: "Élevée",   color: "#f97316" }, // orange
+  critique: { label: "Critique", color: "#ef4444" }, // rouge
+};
+function adminInitials(nom) {
+  return String(nom || "").trim().split(/\s+/).map(w => w[0] || "").join("").toUpperCase();
+}
+function admins() { return RESSOURCES.filter(r => r.cat === "admin" && r.visible !== false); }
+function adminById(id) { return RESSOURCES.find(r => r.id === id && r.cat === "admin"); }
+function adminByInitials(init) {
+  const target = String(init || "").trim().toUpperCase();
+  return admins().find(a => adminInitials(a.nom) === target) || null;
+}
+function _taskNextId() {
+  return (TACHES.length ? Math.max(...TACHES.map(t => Number(t.id) || 0)) : 0) + 1;
+}
+function tacheById(id) { return TACHES.find(t => t.id === id); }
 
 function renderHeaders(firstColLabel) {
   const weekRow = document.getElementById("week-row");
