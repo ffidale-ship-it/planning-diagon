@@ -1599,11 +1599,18 @@ function renderViewTaches() {
   });
 
   // --- Groupement par chantier (ordre des chantiers), puis Général (c===null) ---
+  // On affiche : les chantiers actifs (pour pouvoir ajouter une tache) + tout
+  // chantier porteur de taches + le groupe Général (toujours present).
+  const withTasks = new Set(TACHES.map(t => t.c));
   const groupKeys = [];
-  CHANTIERS.forEach(c => { if (c.id !== 0) groupKeys.push(c.id); });
+  CHANTIERS.forEach(c => {
+    if (c.id === 0) return;
+    const actif = c.show_chantier === undefined ? c.actif !== false : c.show_chantier;
+    if (actif || withTasks.has(c.id)) groupKeys.push(c.id);
+  });
   // chantiers cites dans les taches mais absents de CHANTIERS (ex: 418/419/420)
-  visible.forEach(t => { if (t.c !== null && !groupKeys.includes(t.c)) groupKeys.push(t.c); });
-  groupKeys.push(null); // Général en dernier
+  TACHES.forEach(t => { if (t.c !== null && !groupKeys.includes(t.c)) groupKeys.push(t.c); });
+  groupKeys.push(null); // Général toujours present
 
   const groupLabel = (key) => {
     if (key === null) return "Général / sans chantier";
@@ -1616,8 +1623,6 @@ function renderViewTaches() {
   let html = '<tr><td><div class="todo-wrap">';
   groupKeys.forEach(key => {
     const rows = visible.filter(t => t.c === key);
-    const all = TACHES.filter(t => t.c === key);
-    if (!rows.length && !all.length) return; // groupe totalement vide : on saute
     html += `<div class="todo-group-title">${esc(groupLabel(key))}</div>`;
     html += `<table class="todo-table"><thead><tr>
       <th style="width:32%">À faire</th><th style="width:10%">QUI</th><th style="width:10%">Priorité</th>
@@ -2491,7 +2496,7 @@ function _updateHeaderButtons() {
 }
 function rerender() {
   _updateHeaderButtons();
-  if (VIEW === "taches") { renderViewTaches(); renderStats(); return; }
+  if (VIEW === "taches") { renderStats(); renderViewTaches(); return; }
   if (VIEW === "ouvrier") renderViewOuvrier();
   else if (VIEW === "atelier") renderViewAtelier();
   else if (VIEW === "chantier") renderViewChantier();
