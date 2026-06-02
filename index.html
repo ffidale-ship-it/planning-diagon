@@ -466,6 +466,10 @@
             <span class="v-icon">🚚</span>
             <span class="v-label">Ressources</span>
           </button>
+          <button id="btn-view-taches" class="view-bubble todo-tab">
+            <span class="v-icon">📋</span>
+            <span class="v-label">TO DO LIST</span>
+          </button>
         </div>
         <!-- Date (discret, a droite) -->
         <div class="flex items-center shrink-0">
@@ -1528,6 +1532,15 @@ function renderViewChantier() {
   document.getElementById("planning-body").innerHTML = html;
 }
 
+function renderViewTaches() {
+  document.getElementById("week-row").innerHTML = "";
+  document.getElementById("day-row").innerHTML = "";
+  document.getElementById("coverage-row").innerHTML = "";
+  document.getElementById("context-bar").innerHTML = "";
+  document.getElementById("planning-body").innerHTML =
+    '<tr><td class="p-6 text-slate-400">TO DO LIST — en construction</td></tr>';
+}
+
 function renderViewRessources() {
   renderHeaders("Chantier");
   // Les livraisons peuvent etre planifiees plusieurs fois le meme jour (multi-chantiers)
@@ -2328,6 +2341,7 @@ function clearWeek(isoFrom, isoTo) {
 function _setWeeksForView(v) {
   let newWeeks;
   if (USER_WEEKS !== null) newWeeks = USER_WEEKS;
+  else if (v === "taches") newWeeks = WEEKS; // pas de grille calendrier dans la TO DO LIST
   else newWeeks = v === "atelier" ? 2 : 4;
   if (newWeeks !== WEEKS) {
     WEEKS = newWeeks;
@@ -2342,6 +2356,8 @@ function setView(v) {
   document.getElementById("btn-view-ressources").classList.toggle("active", v === "ressources");
   const btnAtelier = document.getElementById("btn-view-atelier");
   if (btnAtelier) btnAtelier.classList.toggle("active", v === "atelier");
+  const btnTaches = document.getElementById("btn-view-taches");
+  if (btnTaches) btnTaches.classList.toggle("active", v === "taches");
   rerender();
 }
 function _updateHeaderButtons() {
@@ -2366,6 +2382,7 @@ function _updateHeaderButtons() {
 }
 function rerender() {
   _updateHeaderButtons();
+  if (VIEW === "taches") { renderViewTaches(); renderStats(); return; }
   if (VIEW === "ouvrier") renderViewOuvrier();
   else if (VIEW === "atelier") renderViewAtelier();
   else if (VIEW === "chantier") renderViewChantier();
@@ -2418,6 +2435,7 @@ document.getElementById("btn-view-ouvrier").addEventListener("click", () => setV
 document.getElementById("btn-view-chantier").addEventListener("click", () => setView("chantier"));
 document.getElementById("btn-view-atelier").addEventListener("click", () => setView("atelier"));
 document.getElementById("btn-view-ressources").addEventListener("click", () => setView("ressources"));
+document.getElementById("btn-view-taches").addEventListener("click", () => setView("taches"));
 document.getElementById("btn-prev").addEventListener("click", () => goToWeek(-1));
 document.getElementById("btn-next").addEventListener("click", () => goToWeek(1));
 document.getElementById("btn-today").addEventListener("click", () => goToday());
