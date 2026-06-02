@@ -775,6 +775,7 @@ function syncToFirebase() {
     indispos: INDISPOS,
     affectations_atelier: AFFECTATIONS_ATELIER,
     actions: ACTIONS,
+    taches: TACHES,
   };
   const json = JSON.stringify(payload);
   if (json === _lastSyncJson) return;
@@ -798,6 +799,7 @@ function loadFromFirebase(snap) {
   if (data.indispos) INDISPOS = data.indispos; else INDISPOS = [];
   if (data.affectations_atelier) AFFECTATIONS_ATELIER = data.affectations_atelier; else AFFECTATIONS_ATELIER = [];
   if (data.actions) ACTIONS = data.actions; else ACTIONS = [];
+  if (data.taches) TACHES = data.taches; else TACHES = [];
   migrateChantiersSchema();
   migrateRessourcesSchema();
   _dedupChanged = migrateDedupeRessourceIds();
@@ -823,6 +825,7 @@ function initDataSync() {
         indispos: INDISPOS,
         affectations_atelier: AFFECTATIONS_ATELIER,
         actions: ACTIONS,
+        taches: TACHES,
       });
     }
     _firebaseReady = true; // maintenant le sync est autorisé
@@ -977,6 +980,7 @@ function indispoAt(r, d) { return INDISPOS.find(i => i.r === r && i.d === d); }
 // Actions/taches a realiser sur un chantier un jour donne
 // Structure : { c: chantierId, d: "YYYY-MM-DD", txt: "ligne1\nligne2\n..." }
 let ACTIONS = [];
+let TACHES = []; // TO DO LIST : taches par chantier, synchro Firebase (cle "taches")
 function actionsAt(c, d) { return ACTIONS.find(a => a.c === c && a.d === d); }
 function actionsListAt(c, d) {
   const a = actionsAt(c, d);
