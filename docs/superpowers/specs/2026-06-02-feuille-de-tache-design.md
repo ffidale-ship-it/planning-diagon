@@ -1,11 +1,13 @@
-# Feuille de tâche — nouvel onglet (design)
+# TO DO LIST — nouvel onglet (design)
+
+> Libellé de l'onglet dans l'UI : **TO DO LIST**.
 
 Date : 2026-06-02
 Auteur : Frans + Claude
 
 ## Objectif
 
-Ajouter un 5ᵉ onglet « Feuille de tâche » dans l'app planning, destiné à
+Ajouter un 5ᵉ onglet « TO DO LIST » dans l'app planning, destiné à
 **remplacer l'Excel `TB COMMANDE DIAGON > TO DO LIST`**. Liste de tâches par
 chantier, éditable et synchronisée Firebase entre tous les utilisateurs comme le
 reste du planning.
@@ -16,7 +18,7 @@ reste du planning.
   (Par ouvrier / Par chantier / Atelier / Ressources).
 - **Décalé à droite** (espace/séparateur avant) et **un peu plus gros** pour le
   différencier visuellement des vues planning.
-- Icône 📋, label « Feuille de tâche ».
+- Icône 📋, label « TO DO LIST ».
 - `id="btn-view-taches"`, état `VIEW = "taches"`, fonction `renderViewTaches()`.
 
 ## 2. Catégorie « Admin » dans les ressources
