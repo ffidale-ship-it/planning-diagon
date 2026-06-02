@@ -1397,7 +1397,6 @@ function adminInitials(nom) {
   return String(nom || "").trim().split(/\s+/).map(w => w[0] || "").join("").toUpperCase();
 }
 function admins() { return RESSOURCES.filter(r => r.cat === "admin" && r.visible !== false); }
-function adminById(id) { return RESSOURCES.find(r => r.id === id && r.cat === "admin"); }
 function adminByInitials(init) {
   const target = String(init || "").trim().toUpperCase();
   return admins().find(a => adminInitials(a.nom) === target) || null;
@@ -1683,6 +1682,7 @@ function updateTacheField(id, field, value) {
 }
 function toggleTacheQui(id, adminId) {
   const t = tacheById(id); if (!t) return;
+  if (!Array.isArray(t.qui)) t.qui = []; // Firebase supprime les tableaux vides au stockage
   adminId = Number(adminId);
   const i = t.qui.indexOf(adminId);
   if (i >= 0) t.qui.splice(i, 1); else t.qui.push(adminId);
