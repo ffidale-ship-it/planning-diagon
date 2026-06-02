@@ -15,7 +15,19 @@ Frans — dirigeant de DIAGON. Francophone. Préfère les réponses concises, di
 - **Firebase Authentication activée** (Email/Password + Google Sign-In) — 5 users : Frans, Kévin, Olivier, Laurent, Julie
 - Pas de backend — tout est côté client avec Firebase
 
-## Dernière mise à jour majeure (mai 2026)
+## Dernière mise à jour majeure (juin 2026) — onglet TO DO LIST
+5ᵉ onglet « 📋 TO DO LIST » qui remplace l'Excel `TB COMMANDE DIAGON > TO DO LIST`.
+Liste de tâches par chantier, éditable et synchronisée Firebase comme le reste.
+- Bouton `#btn-view-taches` (class `view-bubble todo-tab`, plus gros, décalé à droite), `VIEW = "taches"`, `renderViewTaches()`.
+- Nouvelle catégorie de ressource **`admin`** (encadrement non imputable) : `show_chantier=false` + `show_atelier=false`, **n'apparaît jamais dans les vues planning**. 5 admins : JN/KB/OG/FF/LD.
+- Modèle `TACHE = { id, c (id chantier ou null=Général), todo, qui:[adminId], priorite (faible/normale/elevee/critique/""), dateButoir (ISO local), remarque, fait }`. Tableau `TACHES`, clé Firebase `taches`.
+- Colonnes par ligne : À faire · **Chantier (select, déplaçable)** · QUI (pastilles cliquables) · Priorité (pastille couleur) · Date butoir · Remarque · Fait · Supprimer.
+- Filtres : **boutons rapides par personne** (Tous/JN/KB/OG/FF/LD, toggle), priorité, « Masquer les faites », « Masquer les chantiers sans tâche ».
+- **Seed unique** : `seedTachesIfNeeded()` importe les 77 tâches de l'Excel une seule fois (si la clé `taches` n'existe pas encore dans Firebase) et auto-crée les 5 admins via `ensureSeedAdmins()`. Câblé dans `initDataSync` (capture `hadTaches`).
+- Spec : `docs/superpowers/specs/2026-06-02-feuille-de-tache-design.md` · Plan : `docs/superpowers/plans/2026-06-02-todo-list-tab.md`.
+- Piège Firebase : RTDB supprime les tableaux vides → une tâche `qui:[]` revient `qui` undefined. Le render gère (`t.qui || []`), `toggleTacheQui` réinitialise `t.qui` si besoin.
+
+## Mise à jour précédente (mai 2026) — Firebase Authentication
 Ajout de Firebase Authentication suite à expiration des règles de test :
 - Écran de login DIAGON (orange) avec email/password + bouton Google
 - Conteneur `#app-container` qui cache toute l'app tant que pas connecté
@@ -37,8 +49,8 @@ Tout est dans un seul fichier. Contient :
   - Firebase init + Auth + sync (rerender/mutateAndSync pattern)
   - `AUTH.onAuthStateChanged()` bascule entre login et app
   - `initDataSync()` charge la DB uniquement après auth réussie
-  - Données en mémoire : CHANTIERS (26), RESSOURCES (13), EQUIPEMENTS (8), AFFECTATIONS, LIVRAISONS, BESOINS
-  - 4 vues : Par ouvrier, Par chantier, Atelier, Ressources
+  - Données en mémoire : CHANTIERS (26), RESSOURCES (13 + 5 admins), EQUIPEMENTS (8), AFFECTATIONS, LIVRAISONS, BESOINS, TACHES
+  - 5 vues : Par ouvrier, Par chantier, Atelier, Ressources, TO DO LIST
   - Drag & drop HTML5
   - Duplication (jour suivant / jusqu'à vendredi)
   - Clear par jour / par semaine
