@@ -1700,7 +1700,10 @@ function closeModal() {
 // --- CRUD Ouvriers ---
 // Auto-increment d'IDs : ouvriers a partir de 100, chantiers a partir de 500,
 // equipements en format "type-nn" (ex: nac-01) via _nextEquipId.
-let _nextOuvId = 100;
+// L'ID ouvrier est derive du max existant a chaque creation : indispensable
+// car RESSOURCES est rechargee depuis Firebase et un compteur global repartirait
+// a 100 apres reload, provoquant des collisions d'ID (un nouvel ouvrier herite
+// du planning d'un autre).
 function addOuvrier() {
   const nom = document.getElementById("new-ouv-nom").value.trim();
   const cat = document.getElementById("new-ouv-cat").value;
@@ -1708,7 +1711,8 @@ function addOuvrier() {
   const show_atelier = document.getElementById("new-ouv-atelier").dataset.active === "1";
   if (!nom) { alert("Entrez un nom"); return; }
   if (!show_chantier && !show_atelier) { alert("Cochez au moins 🏗 Chantier ou 🔧 Atelier."); return; }
-  RESSOURCES.push({ id: _nextOuvId++, nom, cat, visible: true, show_chantier, show_atelier });
+  const id = Math.max(99, ...RESSOURCES.map(r => Number(r.id) || 0)) + 1;
+  RESSOURCES.push({ id, nom, cat, visible: true, show_chantier, show_atelier });
   openModal("ouvriers");
   mutateAndSync();
 }
