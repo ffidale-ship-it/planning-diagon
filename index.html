@@ -760,6 +760,7 @@ function logoutUser() {
 
 let _lastSyncJson = "";
 let _firebaseReady = false; // bloque le sync tant que le 1er chargement n'est pas fait
+let _dedupChanged = 0; // nb d'IDs ressource corriges au dernier chargement (doublons)
 
 function syncToFirebase() {
   if (!_firebaseReady) return; // pas de sync avant d'avoir chargé Firebase
@@ -799,6 +800,7 @@ function loadFromFirebase(snap) {
   if (data.actions) ACTIONS = data.actions; else ACTIONS = [];
   migrateChantiersSchema();
   migrateRessourcesSchema();
+  _dedupChanged = migrateDedupeRessourceIds();
   rerender(); // affichage seul, PAS de sync retour
 }
 
@@ -824,6 +826,13 @@ function initDataSync() {
       });
     }
     _firebaseReady = true; // maintenant le sync est autorisé
+
+    // Si des IDs ressource en doublon ont ete corriges au chargement, on persiste
+    // la correction une seule fois dans Firebase.
+    if (_dedupChanged > 0) {
+      console.log("[DIAGON] " + _dedupChanged + " ID(s) ouvrier en doublon corrige(s) -> sauvegarde Firebase");
+      syncToFirebase();
+    }
 
     // Active le listener temps réel APRÈS le 1er chargement
     DB_REF.on("value", snap => {
@@ -1127,6 +1136,28 @@ function migrateRessourcesSchema() {
   RESSOURCES.forEach((r, i) => {
     if (r.order === undefined) r.order = i * 10; // pas de 10 pour laisser de la place a l'insertion
   });
+}
+// Migration : corrige les IDs ressources en doublon (sequelle de l'ancien bug ou
+// _nextOuvId repartait a 100 a chaque chargement). On garde le 1er porteur d'un id
+// (et donc ses affectations existantes) et on attribue un nouvel id unique aux
+// suivants. Les affectations referencant l'id partage restent sur le 1er porteur :
+// les donnees etant ambigues (indissociables), les doublons repartent sans
+// affectation -> a replacer a la main. Retourne le nombre d'IDs corriges.
+function migrateDedupeRessourceIds() {
+  const seen = new Set();
+  let nextId = Math.max(99, ...RESSOURCES.map(r => Number(r.id) || 0));
+  let changed = 0;
+  RESSOURCES.forEach(r => {
+    const id = Number(r.id);
+    if (seen.has(id)) {
+      nextId += 1;
+      r.id = nextId;
+      changed += 1;
+    } else {
+      seen.add(id);
+    }
+  });
+  return changed;
 }
 // Comparateur d'ordre pour trier RESSOURCES (utilise par les vues)
 const _byOrder = (a, b) => (a.order ?? 9999) - (b.order ?? 9999);
