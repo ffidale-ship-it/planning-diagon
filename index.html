@@ -621,12 +621,30 @@ const DB = firebase.database();
 const DB_REF = DB.ref("planning");
 const AUTH = firebase.auth();
 
+// === MODE TEST (dev / preview) ===
+// Hors du vrai site (localhost, file://, preview Claude), on saute l'ecran de
+// login et on travaille sur les donnees d'exemple en memoire. _firebaseReady
+// reste false => syncToFirebase() est un no-op : aucune ecriture vers la vraie
+// base. Seule la prod (ffidale-ship-it.github.io) garde le login obligatoire.
+const PROD_HOST = "ffidale-ship-it.github.io";
+const DEV_MODE = location.hostname !== PROD_HOST;
+
 // === AUTHENTIFICATION ===
 let _currentUser = null;
 let _dataSyncStarted = false;
 
-// Surveillance de l'état de connexion
-AUTH.onAuthStateChanged(user => {
+// Surveillance de l'état de connexion (prod uniquement ; en mode test on bypass)
+if (DEV_MODE) {
+  document.addEventListener("DOMContentLoaded", () => {
+    const ov = document.getElementById("login-overlay");
+    const app = document.getElementById("app-container");
+    if (ov) ov.style.display = "none";
+    if (app) app.style.display = "";
+    const badge = document.getElementById("user-email-display");
+    if (badge) badge.textContent = "MODE TEST (local)";
+    rerender(); // donnees d'exemple en memoire, aucun appel Firebase
+  });
+} else AUTH.onAuthStateChanged(user => {
   if (user) {
     _currentUser = user;
     document.getElementById("login-overlay").style.display = "none";
