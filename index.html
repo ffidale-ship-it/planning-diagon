@@ -138,6 +138,10 @@
   .todo-add-btn { font-size: 12px; color: #6366f1; border: 1px dashed #c7d2fe; border-radius: 6px; padding: 3px 10px; margin-top: 4px; cursor: pointer; background: #fff; }
   .todo-del { color: #ef4444; cursor: pointer; font-weight: 700; }
   .todo-filters { display: flex; gap: 12px; align-items: center; flex-wrap: wrap; font-size: 12px; }
+  .qui-filter-row { display: inline-flex; gap: 4px; align-items: center; }
+  .qui-filter-btn { display: inline-block; background: #f1f5f9; color: #475569; font-weight: 700; font-size: 11px; border: 1px solid #cbd5e1; border-radius: 8px; padding: 2px 9px; cursor: pointer; user-select: none; }
+  .qui-filter-btn:hover { background: #e2e8f0; }
+  .qui-filter-btn.active { background: #6366f1; color: #fff; border-color: #6366f1; }
 
   /* === Scope toggles (🏗 / 🔧) dans les modals === */
   .scope-toggle {
@@ -1690,6 +1694,7 @@ function deleteTache(id) {
 }
 // Filtres : affichage seul -> rerender (jamais de sync)
 function setTacheFilterQui(v) { TACHE_FILTER_QUI = v; rerender(); }
+function toggleTacheFilterQui(v) { TACHE_FILTER_QUI = (String(TACHE_FILTER_QUI) === String(v)) ? "all" : v; rerender(); }
 function setTacheFilterPrio(v) { TACHE_FILTER_PRIO = v; rerender(); }
 function toggleTacheHideDone() { TACHE_HIDE_DONE = !TACHE_HIDE_DONE; rerender(); }
 
@@ -1700,10 +1705,9 @@ function renderViewTaches() {
   document.getElementById("coverage-row").innerHTML = "";
 
   // --- Barre de filtres ---
-  const adminOpts = ['<option value="all">Tous</option>']
-    .concat(admins().sort(_byOrder).map(a =>
-      `<option value="${a.id}" ${TACHE_FILTER_QUI == a.id ? "selected" : ""}>${esc(adminInitials(a.nom))} — ${esc(a.nom)}</option>`))
-    .join("");
+  const quiBtns = `<span class="qui-filter-btn ${TACHE_FILTER_QUI === "all" ? "active" : ""}" onclick="setTacheFilterQui('all')">Tous</span>`
+    + admins().sort(_byOrder).map(a =>
+        `<span class="qui-filter-btn ${String(TACHE_FILTER_QUI) === String(a.id) ? "active" : ""}" onclick="toggleTacheFilterQui(${a.id})" title="${esc(a.nom)}">${esc(adminInitials(a.nom))}</span>`).join("");
   const prioOpts = ['<option value="all">Toutes</option>']
     .concat(Object.entries(PRIORITES).map(([k, p]) =>
       `<option value="${k}" ${TACHE_FILTER_PRIO === k ? "selected" : ""}>${esc(p.label)}</option>`))
@@ -1711,7 +1715,7 @@ function renderViewTaches() {
   document.getElementById("context-bar").innerHTML = `
     <div class="todo-filters">
       <span class="text-xs font-semibold text-slate-500">FILTRES :</span>
-      <label>QUI <select class="todo-inp" style="width:auto" onchange="setTacheFilterQui(this.value)">${adminOpts}</select></label>
+      <label>QUI <span class="qui-filter-row">${quiBtns}</span></label>
       <label>Priorité <select class="todo-inp" style="width:auto" onchange="setTacheFilterPrio(this.value)">${prioOpts}</select></label>
       <label><input type="checkbox" ${TACHE_HIDE_DONE ? "checked" : ""} onchange="toggleTacheHideDone()"> Masquer les faites</label>
     </div>`;
