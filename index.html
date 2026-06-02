@@ -1127,6 +1127,7 @@ function migrateChantiersSchema() {
 // Migration RESSOURCES : derive show_chantier / show_atelier depuis cat
 function migrateRessourcesSchema() {
   RESSOURCES.forEach(r => {
+    if (r.cat === "admin") { r.show_chantier = false; r.show_atelier = false; return; }
     if (r.show_chantier === undefined && r.show_atelier === undefined) {
       if (r.cat === "atelier") { r.show_chantier = false; r.show_atelier = true; }
       else { r.show_chantier = true; r.show_atelier = false; } // chantier et externe par defaut
@@ -1682,6 +1683,7 @@ function openModal(mode) {
           <option value="chantier" ${r.cat === 'chantier' ? 'selected' : ''}>Chantier</option>
           <option value="atelier" ${r.cat === 'atelier' ? 'selected' : ''}>Atelier</option>
           <option value="externe" ${r.cat === 'externe' ? 'selected' : ''}>Externe</option>
+          <option value="admin" ${r.cat === 'admin' ? 'selected' : ''}>Admin</option>
         </select>
         <button onclick="removeOuvrier(${r.id})" class="text-red-400 hover:text-red-600 opacity-70 hover:opacity-100 text-lg leading-none" title="Supprimer">&minus;</button>
       </div>`;
@@ -1695,6 +1697,7 @@ function openModal(mode) {
             <option value="chantier">Chantier</option>
             <option value="atelier">Atelier</option>
             <option value="externe">Externe</option>
+            <option value="admin">Admin</option>
           </select>
           <span id="new-ouv-chantier" onclick="toggleFormScope(this)" data-active="1" class="scope-toggle active" title="Par ouvrier / Par chantier">🏗</span>
           <span id="new-ouv-atelier" onclick="toggleFormScope(this)" data-active="0" class="scope-toggle" title="Atelier">🔧</span>
@@ -1756,10 +1759,11 @@ function closeModal() {
 function addOuvrier() {
   const nom = document.getElementById("new-ouv-nom").value.trim();
   const cat = document.getElementById("new-ouv-cat").value;
-  const show_chantier = document.getElementById("new-ouv-chantier").dataset.active === "1";
-  const show_atelier = document.getElementById("new-ouv-atelier").dataset.active === "1";
+  let show_chantier = document.getElementById("new-ouv-chantier").dataset.active === "1";
+  let show_atelier = document.getElementById("new-ouv-atelier").dataset.active === "1";
   if (!nom) { alert("Entrez un nom"); return; }
-  if (!show_chantier && !show_atelier) { alert("Cochez au moins 🏗 Chantier ou 🔧 Atelier."); return; }
+  if (cat === "admin") { show_chantier = false; show_atelier = false; }
+  else if (!show_chantier && !show_atelier) { alert("Cochez au moins 🏗 Chantier ou 🔧 Atelier."); return; }
   const id = Math.max(99, ...RESSOURCES.map(r => Number(r.id) || 0)) + 1;
   RESSOURCES.push({ id, nom, cat, visible: true, show_chantier, show_atelier });
   openModal("ouvriers");
@@ -1785,8 +1789,9 @@ function renameOuvrier(id, newNom) {
 function setOuvrierCat(id, newCat) {
   const r = RESSOURCES.find(x => x.id === id);
   if (!r) return;
-  if (!["chantier", "atelier", "externe"].includes(newCat)) return;
+  if (!["chantier", "atelier", "externe", "admin"].includes(newCat)) return;
   r.cat = newCat;
+  if (newCat === "admin") { r.show_chantier = false; r.show_atelier = false; }
   mutateAndSync();
   openModal("ouvriers");
 }
