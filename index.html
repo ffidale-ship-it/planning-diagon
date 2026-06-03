@@ -128,6 +128,12 @@
   /* Table TO DO LIST */
   .todo-wrap { padding: 0 24px 40px; }
   .todo-group-title { font-size: 13px; font-weight: 800; color: #334155; text-transform: uppercase; margin: 18px 0 6px; }
+  .todo-group-toggle { cursor: pointer; user-select: none; display: flex; align-items: center; gap: 6px; padding: 4px 6px; border-radius: 6px; }
+  .todo-group-toggle:hover { background: #f1f5f9; }
+  .todo-chevron { font-size: 11px; color: #6366f1; width: 12px; display: inline-block; }
+  .todo-count { font-size: 11px; font-weight: 700; color: #fff; background: #94a3b8; border-radius: 10px; padding: 0 7px; }
+  .todo-collapse-all { font-size: 12px; color: #6366f1; border: 1px solid #c7d2fe; border-radius: 6px; padding: 2px 10px; cursor: pointer; background: #fff; }
+  .todo-collapse-all:hover { background: #eef2ff; }
   table.todo-table { width: 100%; border-collapse: collapse; font-size: 13px; }
   table.todo-table th { text-align: left; font-size: 10px; font-weight: 700; color: #64748b; text-transform: uppercase; padding: 4px 8px; border-bottom: 1px solid #e2e8f0; }
   table.todo-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; vertical-align: top; }
@@ -1249,6 +1255,8 @@ let TACHE_FILTER_QUI = "all";    // "all" | adminId
 let TACHE_FILTER_PRIO = "all";   // "all" | clé de PRIORITES
 let TACHE_HIDE_DONE = false;     // masquer les taches faites
 let TACHE_HIDE_EMPTY = false;    // masquer les chantiers sans tache
+let TACHE_EXPANDED = new Set();  // cles de chantiers deplies (defaut : tout replie)
+let _tacheGroupKeys = [];        // dernieres cles de groupes rendues (pour tout deplier)
 let SHOW_SATURDAY = false; // samedi masque par defaut, bouton + pour ajouter
 let USER_WEEKS = null; // null = auto (4 ou 2 atelier), sinon override (1 ou 4)
 let HIDE_EMPTY_CHANTIERS = true; // masquer chantiers actifs sans affectation dans les 4 semaines visibles
@@ -1699,29 +1707,23 @@ function toggleTacheFilterQui(v) { TACHE_FILTER_QUI = (String(TACHE_FILTER_QUI) 
 function setTacheFilterPrio(v) { TACHE_FILTER_PRIO = v; rerender(); }
 function toggleTacheHideDone() { TACHE_HIDE_DONE = !TACHE_HIDE_DONE; rerender(); }
 function toggleTacheHideEmpty() { TACHE_HIDE_EMPTY = !TACHE_HIDE_EMPTY; rerender(); }
+function toggleTacheGroup(key) {
+  const k = (key === "null" || key === null) ? null : Number(key);
+  if (TACHE_EXPANDED.has(k)) TACHE_EXPANDED.delete(k); else TACHE_EXPANDED.add(k);
+  rerender();
+}
+function toggleAllTaches() {
+  const anyExpanded = _tacheGroupKeys.some(k => TACHE_EXPANDED.has(k));
+  if (anyExpanded) TACHE_EXPANDED.clear();
+  else _tacheGroupKeys.forEach(k => TACHE_EXPANDED.add(k));
+  rerender();
+}
 
 function renderViewTaches() {
   // Pas de grille calendrier : on vide les en-tetes planning
   document.getElementById("week-row").innerHTML = "";
   document.getElementById("day-row").innerHTML = "";
   document.getElementById("coverage-row").innerHTML = "";
-
-  // --- Barre de filtres ---
-  const quiBtns = `<span class="qui-filter-btn ${TACHE_FILTER_QUI === "all" ? "active" : ""}" onclick="setTacheFilterQui('all')">Tous</span>`
-    + admins().sort(_byOrder).map(a =>
-        `<span class="qui-filter-btn ${String(TACHE_FILTER_QUI) === String(a.id) ? "active" : ""}" onclick="toggleTacheFilterQui(${a.id})" title="${esc(a.nom)}">${esc(adminInitials(a.nom))}</span>`).join("");
-  const prioOpts = ['<option value="all">Toutes</option>']
-    .concat(Object.entries(PRIORITES).map(([k, p]) =>
-      `<option value="${k}" ${TACHE_FILTER_PRIO === k ? "selected" : ""}>${esc(p.label)}</option>`))
-    .join("");
-  document.getElementById("context-bar").innerHTML = `
-    <div class="todo-filters">
-      <span class="text-xs font-semibold text-slate-500">FILTRES :</span>
-      <label>QUI <span class="qui-filter-row">${quiBtns}</span></label>
-      <label>Priorité <select class="todo-inp" style="width:auto" onchange="setTacheFilterPrio(this.value)">${prioOpts}</select></label>
-      <label><input type="checkbox" ${TACHE_HIDE_DONE ? "checked" : ""} onchange="toggleTacheHideDone()"> Masquer les faites</label>
-      <label><input type="checkbox" ${TACHE_HIDE_EMPTY ? "checked" : ""} onchange="toggleTacheHideEmpty()"> Masquer les chantiers sans tâche</label>
-    </div>`;
 
   // --- Filtrage ---
   const visible = TACHES.filter(t => {
@@ -1744,6 +1746,26 @@ function renderViewTaches() {
   // chantiers cites dans les taches mais absents de CHANTIERS (ex: 418/419/420)
   TACHES.forEach(t => { if (t.c !== null && !groupKeys.includes(t.c)) groupKeys.push(t.c); });
   groupKeys.push(null); // Général toujours present
+  _tacheGroupKeys = groupKeys.slice(); // memorise pour "tout deplier / tout replier"
+
+  // --- Barre de filtres ---
+  const quiBtns = `<span class="qui-filter-btn ${TACHE_FILTER_QUI === "all" ? "active" : ""}" onclick="setTacheFilterQui('all')">Tous</span>`
+    + admins().sort(_byOrder).map(a =>
+        `<span class="qui-filter-btn ${String(TACHE_FILTER_QUI) === String(a.id) ? "active" : ""}" onclick="toggleTacheFilterQui(${a.id})" title="${esc(a.nom)}">${esc(adminInitials(a.nom))}</span>`).join("");
+  const prioOpts = ['<option value="all">Toutes</option>']
+    .concat(Object.entries(PRIORITES).map(([k, p]) =>
+      `<option value="${k}" ${TACHE_FILTER_PRIO === k ? "selected" : ""}>${esc(p.label)}</option>`))
+    .join("");
+  const anyExpanded = groupKeys.some(k => TACHE_EXPANDED.has(k));
+  document.getElementById("context-bar").innerHTML = `
+    <div class="todo-filters">
+      <span class="text-xs font-semibold text-slate-500">FILTRES :</span>
+      <label>QUI <span class="qui-filter-row">${quiBtns}</span></label>
+      <label>Priorité <select class="todo-inp" style="width:auto" onchange="setTacheFilterPrio(this.value)">${prioOpts}</select></label>
+      <label><input type="checkbox" ${TACHE_HIDE_DONE ? "checked" : ""} onchange="toggleTacheHideDone()"> Masquer les faites</label>
+      <label><input type="checkbox" ${TACHE_HIDE_EMPTY ? "checked" : ""} onchange="toggleTacheHideEmpty()"> Masquer les chantiers sans tâche</label>
+      <button class="todo-collapse-all" onclick="toggleAllTaches()">${anyExpanded ? "▸ Tout replier" : "▾ Tout déplier"}</button>
+    </div>`;
 
   const groupLabel = (key) => {
     if (key === null) return "Général / sans chantier";
@@ -1762,7 +1784,11 @@ function renderViewTaches() {
   groupKeys.forEach(key => {
     const rows = visible.filter(t => t.c === key);
     if (TACHE_HIDE_EMPTY && rows.length === 0) return;
-    html += `<div class="todo-group-title">${esc(groupLabel(key))}</div>`;
+    const expanded = TACHE_EXPANDED.has(key);
+    const kArg = key === null ? "'null'" : key;
+    html += `<div class="todo-group-title todo-group-toggle" onclick="toggleTacheGroup(${kArg})">
+      <span class="todo-chevron">${expanded ? "▾" : "▸"}</span>${esc(groupLabel(key))}<span class="todo-count">${rows.length}</span></div>`;
+    if (!expanded) return; // chantier replié : on n'affiche pas les tâches
     html += `<table class="todo-table"><thead><tr>
       <th style="width:24%">À faire</th><th style="width:14%">Chantier</th><th style="width:9%">QUI</th><th style="width:9%">Priorité</th>
       <th style="width:11%">Date butoir</th><th style="width:23%">Remarque</th><th style="width:5%">Fait</th><th style="width:5%"></th>
