@@ -88,6 +88,9 @@
   .cat-livraison { background: #fed7aa; color: #7c2d12; border-color: #fb923c; border-style: dashed; }
   .cat-besoin    { background: #f1f5f9; color: #475569; border-color: #94a3b8; border-style: dotted; font-style: italic; }
   .cat-indispo   { background: repeating-linear-gradient(45deg, #f1f5f9, #f1f5f9 5px, #cbd5e1 5px, #cbd5e1 10px); color: #334155; border-color: #94a3b8; }
+  .cat-marqueur  { background: #ffedd5; color: #9a3412; border-color: #fb923c; border-style: dashed; }
+  /* Colonne jour de conge : hachures legeres (repere visuel, ne bloque pas l'affectation) */
+  td.cell.cell-conge, th.cell-conge { background: repeating-linear-gradient(45deg, #f8fafc, #f8fafc 6px, #e2e8f0 6px, #e2e8f0 12px); }
   .cat-indispo-conge     { box-shadow: inset 0 0 0 2px #fbbf24; }
   .cat-indispo-maladie   { box-shadow: inset 0 0 0 2px #ef4444; }
   .cat-indispo-formation { box-shadow: inset 0 0 0 2px #3b82f6; }
@@ -188,6 +191,7 @@
   .ouvrier-name-bubble.cat-chantier { background: #dbeafe; color: #1e40af; border-color: #60a5fa; }
   .ouvrier-name-bubble.cat-atelier  { background: #e0e7ff; color: #3730a3; border-color: #818cf8; }
   .ouvrier-name-bubble.cat-externe  { background: #fee2e2; color: #991b1b; border-color: #f87171; }
+  .ouvrier-name-bubble.cat-marqueur { background: #ffedd5; color: #9a3412; border-color: #fb923c; border-style: dashed; }
   .ouvrier-name-bubble[draggable="true"] { cursor: grab; }
   .ouvrier-name-bubble[draggable="true"]:active { cursor: grabbing; }
   .ouvrier-name-bubble.dragging { opacity: 0.4; }
@@ -674,6 +678,7 @@ if (DEV_MODE) {
     if (app) app.style.display = "";
     const badge = document.getElementById("user-email-display");
     if (badge) badge.textContent = "MODE TEST (local)";
+    ensureMarqueur(); // marqueur 📌 visible aussi sur les donnees d'exemple
     rerender(); // donnees d'exemple en memoire, aucun appel Firebase
   });
 } else AUTH.onAuthStateChanged(user => {
@@ -808,6 +813,7 @@ function syncToFirebase() {
     affectations_atelier: AFFECTATIONS_ATELIER,
     actions: ACTIONS,
     taches: TACHES,
+    jours_conge: JOURS_CONGE,
   };
   const json = JSON.stringify(payload);
   if (json === _lastSyncJson) return;
@@ -832,8 +838,10 @@ function loadFromFirebase(snap) {
   if (data.affectations_atelier) AFFECTATIONS_ATELIER = data.affectations_atelier; else AFFECTATIONS_ATELIER = [];
   if (data.actions) ACTIONS = data.actions; else ACTIONS = [];
   if (data.taches) TACHES = data.taches; else TACHES = [];
+  JOURS_CONGE = data.jours_conge || []; // RTDB supprime les tableaux vides → undefined possible
   migrateChantiersSchema();
   migrateRessourcesSchema();
+  ensureMarqueur();
   _dedupChanged = migrateDedupeRessourceIds();
   rerender(); // affichage seul, PAS de sync retour
 }
@@ -1017,11 +1025,29 @@ const INDISPO_TYPES = {
   formation: { label: "Formation", icon: "📚" },
 };
 function indispoAt(r, d) { return INDISPOS.find(i => i.r === r && i.d === d); }
+// Jour de conge (colonne hachuree) : repere visuel uniquement, ne bloque rien.
+function estConge(iso) { return JOURS_CONGE.includes(iso); }
+function toggleConge(iso) {
+  if (typeof event !== "undefined" && event && event.stopPropagation) event.stopPropagation();
+  if (JOURS_CONGE.includes(iso)) JOURS_CONGE = JOURS_CONGE.filter(d => d !== iso);
+  else JOURS_CONGE = [...JOURS_CONGE, iso].sort();
+  mutateAndSync();
+}
+// Ressource-marqueur (📌 A planifier) : pas un ouvrier, peut viser N chantiers/jour.
+function isMarqueurR(id) { const r = ressourceById(id); return !!(r && r.cat === "marqueur"); }
+// Seed idempotent : garantit la presence du marqueur dans RESSOURCES (id 900).
+// En memoire seulement — persiste dans Firebase a la prochaine mutation.
+function ensureMarqueur() {
+  if (!RESSOURCES.some(r => r.cat === "marqueur")) {
+    RESSOURCES.push({ id: 900, nom: "📌 À planifier", cat: "marqueur", chef: false, order: 900, visible: true, show_chantier: true, show_atelier: false });
+  }
+}
 
 // Actions/taches a realiser sur un chantier un jour donne
 // Structure : { c: chantierId, d: "YYYY-MM-DD", txt: "ligne1\nligne2\n..." }
 let ACTIONS = [];
 let TACHES = []; // TO DO LIST : taches par chantier, synchro Firebase (cle "taches")
+let JOURS_CONGE = []; // dates ISO marquees "conge" : colonnes hachurees (repere visuel, ne bloque pas)
 
 // Mapping canonique des admins (initiales -> nom) pour resoudre le seed QUI.
 const ADMIN_SEED_MAP = { JN: "Julie Noville", KB: "Kévin Bernard", OG: "Olivier Gillet", FF: "François Fidale", LD: "Laurent Delehouse" };
@@ -1444,7 +1470,8 @@ function renderHeaders(firstColLabel) {
     const satCls = isSat ? "col-sat" : "";
     const sepCls = isMonday ? "week-separator" : "";
     const dayIdx = (d.getDay() + 6) % 7;
-    dHtml += `<th class="border-r border-b border-slate-200 px-1 py-1 text-[11px] text-slate-600 font-medium ${cls} ${satCls} ${sepCls}"><div>${DAYS[dayIdx]} <button onclick="clearDay('${iso}')" class="text-red-400 hover:text-red-600 text-[9px]" title="Effacer le ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}">🗑</button></div><div class="text-[10px] text-slate-400">${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}</div></th>`;
+    const congeCls = estConge(iso) ? "cell-conge" : "";
+    dHtml += `<th class="border-r border-b border-slate-200 px-1 py-1 text-[11px] text-slate-600 font-medium ${cls} ${satCls} ${sepCls} ${congeCls}"><div>${DAYS[dayIdx]} <button onclick="toggleConge('${iso}')" class="${estConge(iso) ? 'opacity-100' : 'opacity-30'} hover:opacity-100 text-[9px]" title="${estConge(iso) ? 'Retirer le congé du' : 'Marquer congé le'} ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')} (repère visuel, ne bloque pas)">🏖</button> <button onclick="clearDay('${iso}')" class="text-red-400 hover:text-red-600 text-[9px]" title="Effacer le ${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}">🗑</button></div><div class="text-[10px] text-slate-400">${String(d.getDate()).padStart(2,"0")}/${String(d.getMonth()+1).padStart(2,"0")}${estConge(iso) ? ' <span title="Jour de congé">🏖</span>' : ''}</div></th>`;
   });
   dayRow.innerHTML = dHtml;
 }
@@ -1480,6 +1507,7 @@ function renderViewOuvrier() {
     "OUVRIERS CHANTIER": RESSOURCES.filter(r => r.cat === "chantier" && r.visible !== false && r.show_chantier).sort(_byOrder),
     "AIDE ATELIER":      RESSOURCES.filter(r => r.cat === "atelier" && r.visible !== false && r.show_chantier).sort(_byOrder),
     "EXTERNES":          RESSOURCES.filter(r => r.cat === "externe" && r.visible !== false && r.show_chantier).sort(_byOrder),
+    "📌 À PLANIFIER":    RESSOURCES.filter(r => r.cat === "marqueur" && r.visible !== false && r.show_chantier).sort(_byOrder),
   };
   let html = "";
   for (const [label, list] of Object.entries(groups)) {
@@ -1491,12 +1519,20 @@ function renderViewOuvrier() {
         const isToday = iso === TODAY;
         const isSat = isWeekend(d);
         const isMonday = i > 0 && d.getDay() === 1;
-        const satCls = isSat ? "cell-sat" : "";
+        const satCls = (isSat ? "cell-sat " : "") + (estConge(iso) ? "cell-conge" : "");
         const sepCls = isMonday ? "week-separator" : "";
         const aff = AFFECTATIONS.find(a => a.r === r.id && a.d === iso && !_isAtelierOnly(a.c));
         const ind = indispoAt(r.id, iso);
         let inner = "";
-        if (ind) {
+        if (r.cat === "marqueur") {
+          // Ligne marqueur : PLUSIEURS chantiers possibles le meme jour → toutes les bulles.
+          const affsM = AFFECTATIONS.filter(a => a.r === r.id && a.d === iso && !_isAtelierOnly(a.c));
+          inner = affsM.map(a => {
+            const chM = chantierById(a.c);
+            if (!chM) return "";
+            return `<span class="bulle cat-marqueur" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${a.c}" data-d="${iso}" title="À planifier : ${chM.id === 0 ? 'Atelier' : chM.id + ' - ' + esc(chM.nom)} — double-clic pour retirer">📌 ${esc(chM.id === 0 ? "Atelier" : chM.nom)}</span>`;
+          }).join("");
+        } else if (ind) {
           const info = INDISPO_TYPES[ind.type] || { label: ind.type, icon: "" };
           inner = `<span class="bulle cat-indispo cat-indispo-${ind.type}" draggable="true" data-kind="indispo" data-r="${r.id}" data-d="${iso}" data-type="${ind.type}" title="${info.label} - double-clic pour retirer">${info.icon} ${info.label}</span>`;
         } else if (aff) {
@@ -1559,7 +1595,7 @@ function renderViewAtelier() {
       const isToday = iso === TODAY;
       const isSat = isWeekend(d);
       const isMonday = i > 0 && d.getDay() === 1;
-      const satCls = isSat ? "cell-sat" : "";
+      const satCls = (isSat ? "cell-sat " : "") + (estConge(iso) ? "cell-conge" : "");
       const sepCls = isMonday ? "week-separator" : "";
       const ind = indispoAt(r.id, iso);
       let inner = "";
@@ -1624,7 +1660,7 @@ function renderViewChantier() {
       const isToday = iso === TODAY;
       const isSat = isWeekend(d);
       const isMonday = i > 0 && d.getDay() === 1;
-      const satCls = isSat ? "cell-sat" : "";
+      const satCls = (isSat ? "cell-sat " : "") + (estConge(iso) ? "cell-conge" : "");
       const sepCls = isMonday ? "week-separator" : "";
       // Exclut les affectations d'ouvriers indisponibles ce jour-la (coherence donnees)
       const inCell = AFFECTATIONS.filter(a => a.c === ch.id && a.d === iso && !indispoAt(a.r, iso));
@@ -1636,7 +1672,8 @@ function renderViewChantier() {
       const bulles = inCell.map(a => {
         const r = ressourceById(a.r);
         if (!r) return "";
-        return `<span class="bulle ${color}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${esc(r.nom)}">${ouvrierLabel(r)}</span>`;
+        const clsBulle = r.cat === "marqueur" ? "cat-marqueur" : color;
+        return `<span class="bulle ${clsBulle}" draggable="true" data-kind="ouvrier" data-r="${r.id}" data-c="${ch.id}" data-d="${iso}" title="${r.chef ? 'Chef - ' : ''}${esc(r.nom)}">${ouvrierLabel(r)}</span>`;
       }).join("");
       const dupBtns = inCell.length > 0 ? `<div class="dup-btns"><button onclick="dupNext('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe au jour suivant">+1j</button><button onclick="dupWeek('chantier',${ch.id},null,'${iso}')" class="dup-btn" title="Copier l'équipe jusqu'au vendredi">→ven</button><button onclick="openActionsModal(${ch.id},'${iso}')" class="dup-btn dup-btn-actions" title="Note / actions du chantier ce jour">📝</button><button onclick="clearCell('chantier',${ch.id},null,'${iso}')" class="dup-btn dup-btn-clear" title="Vider la case (retirer toute l'équipe)">✕</button></div>` : "";
       const cornerBtn = inCell.length > 0 ? _cornerActionButton(ch.id, iso) : "";
@@ -1656,7 +1693,7 @@ function renderViewChantier() {
       const isToday = iso === TODAY;
       const isSat = isWeekend(d);
       const isMonday = i > 0 && d.getDay() === 1;
-      const satCls = isSat ? "cell-sat" : "";
+      const satCls = (isSat ? "cell-sat " : "") + (estConge(iso) ? "cell-conge" : "");
       const sepCls = isMonday ? "week-separator" : "";
       const indsDay = INDISPOS.filter(ind => ind.d === iso);
       const bulles = indsDay.map(ind => {
@@ -1875,7 +1912,7 @@ function renderViewRessources() {
       const isMon = d.getDay() === 1;
       const isSat = isWeekend(d);
       const isMonday = i > 0 && d.getDay() === 1;
-      const satCls = isSat ? "cell-sat" : "";
+      const satCls = (isSat ? "cell-sat " : "") + (estConge(iso) ? "cell-conge" : "");
       const sepCls = isMonday ? "week-separator" : "";
       const equipCell = AFFECTATIONS_EQUIP.filter(a => a.c === ch.id && a.d === iso);
       const equipHtml = equipCell.map(a => {
@@ -2333,15 +2370,20 @@ function attachDragHandlers() {
       if (VIEW === "ouvrier" && (dragged.kind === "ouvrier" || !dragged.kind)) {
         const targetR = parseInt(zone.dataset.r);
         const targetD = zone.dataset.d;
+        // Marqueur « À planifier » : N chantiers le meme jour autorises (pas de conflit).
+        if (!isMarqueurR(targetR)) {
         if (indispoAt(targetR, targetD)) { zone.classList.add("drop-forbidden"); return; }
         const existing = AFFECTATIONS.find(a => a.r === targetR && a.d === targetD);
         if (existing && !(existing.r === dragged.r && existing.c === dragged.c && existing.d === dragged.d)) { zone.classList.add("drop-forbidden"); return; }
+        }
       }
       if (VIEW === "chantier" && (dragged.kind === "ouvrier" || !dragged.kind)) {
         const targetD = zone.dataset.d;
+        if (!isMarqueurR(dragged.r)) {
         if (indispoAt(dragged.r, targetD)) { zone.classList.add("drop-forbidden"); return; }
         const conflict = AFFECTATIONS.find(a => a.r === dragged.r && a.d === targetD && !(a.c === dragged.c && a.d === dragged.d));
         if (conflict) { zone.classList.add("drop-forbidden"); return; }
+        }
       }
       if ((VIEW === "ressources" || VIEW === "chantier") && dragged.kind === "equip") {
         // Les livraisons (1 fournisseur = N chantiers/jour) sont exemptees du verrou 1/jour.
@@ -2414,10 +2456,13 @@ function handleDrop(zone) {
     if (VIEW === "ouvrier") { newR = parseInt(zone.dataset.r); newC = dragged.c; }
     else { newC = parseInt(zone.dataset.c); newR = dragged.r; }
     if (dragged.d !== "pool") AFFECTATIONS = AFFECTATIONS.filter(a => !(a.r === dragged.r && a.c === dragged.c && a.d === dragged.d));
-    // Conflit indispo : un ouvrier en conge/maladie/formation ne peut pas etre affecte
-    if (indispoAt(newR, newD)) { if (dragged.d !== "pool") AFFECTATIONS.push({r:dragged.r,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
-    const conflict = AFFECTATIONS.find(a => a.r === newR && a.d === newD);
-    if (conflict) { if (dragged.d !== "pool") AFFECTATIONS.push({r:dragged.r,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
+    // Marqueur « À planifier » : exempte des conflits (N chantiers le meme jour).
+    if (!isMarqueurR(newR)) {
+      // Conflit indispo : un ouvrier en conge/maladie/formation ne peut pas etre affecte
+      if (indispoAt(newR, newD)) { if (dragged.d !== "pool") AFFECTATIONS.push({r:dragged.r,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
+      const conflict = AFFECTATIONS.find(a => a.r === newR && a.d === newD);
+      if (conflict) { if (dragged.d !== "pool") AFFECTATIONS.push({r:dragged.r,c:dragged.c,d:dragged.d}); mutateAndSync(); return; }
+    }
     if (!AFFECTATIONS.find(a => a.r === newR && a.c === newC && a.d === newD)) AFFECTATIONS.push({r:newR,c:newC,d:newD});
     mutateAndSync(); return;
   }
@@ -2537,7 +2582,11 @@ function _dateInView(targetD) {
 }
 
 function _dupOuvrierToDate(r, c, targetD) {
-  if (AFFECTATIONS.find(a => a.r === r && a.d === targetD)) return false;
+  // Marqueur : seul le doublon exact (meme chantier, meme jour) est bloque.
+  const deja = isMarqueurR(r)
+    ? AFFECTATIONS.find(a => a.r === r && a.c === c && a.d === targetD)
+    : AFFECTATIONS.find(a => a.r === r && a.d === targetD);
+  if (deja) return false;
   AFFECTATIONS.push({ r: r, c: c, d: targetD });
   return true;
 }
@@ -2546,7 +2595,11 @@ function _dupChantierToDate(chId, fromD, targetD) {
   const team = AFFECTATIONS.filter(a => a.c === chId && a.d === fromD);
   let added = 0;
   team.forEach(a => {
-    if (!AFFECTATIONS.find(x => x.r === a.r && x.d === targetD)) {
+    // Marqueur : seul le doublon exact (meme chantier) bloque la copie.
+    const deja = isMarqueurR(a.r)
+      ? AFFECTATIONS.find(x => x.r === a.r && x.c === chId && x.d === targetD)
+      : AFFECTATIONS.find(x => x.r === a.r && x.d === targetD);
+    if (!deja) {
       AFFECTATIONS.push({ r: a.r, c: chId, d: targetD });
       added++;
     }
@@ -2565,7 +2618,8 @@ function dupNext(mode, id1, id2, fromD) {
       alert((r ? r.nom : "Cet ouvrier") + " est en indispo le jour suivant : duplication impossible.");
       return;
     }
-    const conflict = AFFECTATIONS.find(a => a.r === id1 && a.d === targetD);
+    // Marqueur « À planifier » : pas de conflit 1/jour, on copie simplement.
+    const conflict = isMarqueurR(id1) ? null : AFFECTATIONS.find(a => a.r === id1 && a.d === targetD);
     if (conflict) {
       // Cas 1 : deja sur le meme chantier -> rien a faire, succes silencieux
       if (conflict.c === id2) { mutateAndSync(); return; }
